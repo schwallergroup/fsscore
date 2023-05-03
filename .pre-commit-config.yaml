@@ -1,4 +1,8 @@
-exclude: '^docs/conf.py'
+exclude: |
+    (?x)(
+        ^docs/conf.py|
+        ^scscore/
+    )
 
 repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -24,16 +28,16 @@ repos:
 #   - id: pyupgrade
 #     args: ['--py37-plus']
 
-## If you want to avoid flake8 errors due to unused vars or imports:
-# - repo: https://github.com/PyCQA/autoflake
-#   rev: v2.0.2
-#   hooks:
-#   - id: autoflake
-#     args: [
-#       --in-place,
-#       --remove-all-unused-imports,
-#       --remove-unused-variables,
-#     ]
+# If you want to avoid flake8 errors due to unused vars or imports:
+- repo: https://github.com/PyCQA/autoflake
+  rev: v2.0.2
+  hooks:
+  - id: autoflake
+    args: [
+      --in-place,
+      --remove-all-unused-imports,
+      --remove-unused-variables,
+    ]
 
 - repo: https://github.com/PyCQA/isort
   rev: 5.11.5
