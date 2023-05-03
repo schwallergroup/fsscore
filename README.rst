@@ -34,11 +34,19 @@ intuitive-sc
 ============
 
 
-    Add a short description here!
+    Synthetic complexity score augmented with human intuition.
 
 
 A longer description of your project goes here...
 
+Installation
+============
+::
+    git clone https://github.com/schwallergroup/intuitive-sc.git
+    conda create -n intuitive-sc python=3.10
+    conda activate intuitive-sc
+    cd intuitive-sc
+    pip install -e .
 
 .. _pyscaffold-notes:
 
