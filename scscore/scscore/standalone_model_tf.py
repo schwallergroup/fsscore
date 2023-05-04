@@ -7,14 +7,14 @@ standalone_model_numpy version of this class.
 '''
 
 import tensorflow as tf
-from utils.nn import linearND
+# from utils.nn import linearND
 import math, sys, random, os
 import numpy as np
 import time
 import rdkit.Chem as Chem 
 import rdkit.Chem.AllChem as AllChem
+from functools import reduce
 
-import os 
 project_root = os.path.dirname(os.path.dirname(__file__))
 
 score_scale = 5.0
@@ -24,6 +24,25 @@ FP_len = 1024
 FP_rad = 2
 batch_size = 2
 
+def linearND(input_, output_size, scope, reuse=False, init_bias=0.0):
+    shape = input_.get_shape().as_list()
+    ndim = len(shape)
+    stddev = min(1.0 / math.sqrt(shape[-1]), 0.1)
+    with tf.variable_scope(scope, reuse=reuse):
+        W = tf.get_variable("Matrix", [shape[-1], output_size], tf.float32, tf.random_normal_initializer(stddev=stddev))
+    X_shape = tf.gather(tf.shape(input_), list(range(ndim-1)))
+    target_shape = tf.concat(0, [X_shape, [output_size]]) # in original: axis stated after []
+    exp_input = tf.reshape(input_, [-1, shape[-1]])
+    if init_bias is None:
+        res = tf.matmul(exp_input, W)
+    else:
+        with tf.variable_scope(scope, reuse=reuse):
+            b = tf.get_variable("bias", [output_size], initializer=tf.constant_initializer(init_bias))
+        res = tf.matmul(exp_input, W) + b
+    res = tf.reshape(res, target_shape)
+    res.set_shape(shape[:-1] + [output_size])
+    return res
+
 class SCScorer():
     def __init__(self):
         self.session = tf.Session()
@@ -32,7 +51,7 @@ class SCScorer():
         self.FP_len = FP_len; self.FP_rad = FP_rad
         self.input_mol = tf.placeholder(tf.float32, [batch_size*2, FP_len])
         self.mol_hiddens = tf.nn.relu(linearND(self.input_mol, hidden_size, scope="encoder0"))
-        for d in xrange(1, depth):
+        for d in range(1, depth):
             self.mol_hiddens = tf.nn.relu(linearND(self.mol_hiddens, hidden_size, scope="encoder%i"%d))
 
         self.score_sum = linearND(self.mol_hiddens, 1, scope="score_sum")
@@ -42,7 +61,7 @@ class SCScorer():
         tf.global_variables_initializer().run(session=self.session)
         size_func = lambda v: reduce(lambda x, y: x*y, v.get_shape().as_list())
         n = sum(size_func(v) for v in tf.trainable_variables())
-        print "Model size: %dK" % (n/1000,)
+        print("Model size: %dK" % (n/1000,))
 
         self.coord = tf.train.Coordinator()
         return self
@@ -82,7 +101,7 @@ class SCScorer():
         src_batch = [smi]
         while len(src_batch) != (batch_size * 2): # round out last batch
             src_batch.append('')
-        src_mols = np.array(map(self.smi_to_fp, src_batch), dtype=np.float32)
+        src_mols = np.array(list(map(self.smi_to_fp, src_batch)), dtype=np.float32)
         if sum(sum(src_mols)) == 0:
             if v: print('Could not get fingerprint?')
             cur_score = [0.]
@@ -100,29 +119,29 @@ class SCScorer():
         return (smi, cur_score[0])
 
     def dump_to_numpy_arrays(self, dump_path):
-        import cPickle as pickle
+        import _pickle as pickle
         with open(dump_path, 'wb') as fid:
             pickle.dump([v.eval(session=self.session) for v in tf.trainable_variables()], fid, -1)
 
 
 if __name__ == '__main__':
-    model = SCScorer()
-    model.build()
-    model.restore(os.path.join(project_root, 'models', 'full_reaxys_model_1024bool'), 'ckpt-10654')
-    smis = ['CCCOCCC', 'CCCNc1ccccc1']
-    for smi in smis:
-        (smi, sco) = model.get_score_from_smi(smi)
-        print('%.4f <--- %s' % (sco, smi))
-    model.dump_to_numpy_arrays(os.path.join(project_root, 'models', 'full_reaxys_model_1024bool', 'model.ckpt-10654.as_numpy.pickle'))
-
     # model = SCScorer()
-    # model.build(FP_len=2048)
-    # model.restore(os.path.join(project_root, 'models', 'full_reaxys_model_2048bool'), 'ckpt-10654')
+    # model.build()
+    # model.restore(os.path.join(project_root, 'models', 'full_reaxys_model_1024bool'), 'ckpt-10654')
     # smis = ['CCCOCCC', 'CCCNc1ccccc1']
     # for smi in smis:
     #     (smi, sco) = model.get_score_from_smi(smi)
     #     print('%.4f <--- %s' % (sco, smi))
-    # model.dump_to_numpy_arrays(os.path.join(project_root, 'models', 'full_reaxys_model_2048bool', 'model.ckpt-10654.as_numpy.pickle'))
+    # model.dump_to_numpy_arrays(os.path.join(project_root, 'models', 'full_reaxys_model_1024bool', 'model.ckpt-10654.as_numpy.pickle'))
+
+    model = SCScorer()
+    model.build(FP_len=2048)
+    model.restore(os.path.join(project_root, 'models', 'full_reaxys_model_2048bool'), 'ckpt-10654')
+    smis = ['CCCOCCC', 'CCCNc1ccccc1']
+    for smi in smis:
+        (smi, sco) = model.get_score_from_smi(smi)
+        print('%.4f <--- %s' % (sco, smi))
+    model.dump_to_numpy_arrays(os.path.join(project_root, 'models', 'full_reaxys_model_2048bool', 'model.ckpt-10654.as_numpy.pickle'))
 
     # model = SCScorer()
     # model.build()

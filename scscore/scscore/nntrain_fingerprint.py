@@ -1,22 +1,23 @@
 import tensorflow as tf
-from utils.nn import linearND
+# from utils.nn import linearND
 import math, sys, random, os
 from optparse import OptionParser
 import threading
 from multiprocessing import Queue, Process
 import numpy as np
-from Queue import Empty
+from queue import Empty
 import time
 import h5py
 from itertools import chain
-import os 
+from functools import reduce
+from rdkit import Chem
+import pickle
 project_root = os.path.dirname(os.path.dirname(__file__))
 
 NK = 10
 NK0 = 5
 report_interval = 1
 max_save = 30
-min_iterations = 1000
 
 score_scale = 5.0
 min_separation = 0.25
@@ -38,7 +39,30 @@ parser.add_option("-v", "--verbose", dest="verbose_test", default=False)
 parser.add_option("-c", "--checkpoint", dest="checkpoint", default="final")
 parser.add_option("-s", "--saveint", dest="save_interval", default=0)
 parser.add_option("-i", "--interactive", dest="interactive", default=False)
+parser.add_option("-f","--finetune", dest="finetune", default=False)
+parser.add_option("-e", "--iter", dest="min_iterations", default=1000)
+
 opts,args = parser.parse_args()
+print(opts, args)
+
+def linearND(input_, output_size, scope, reuse=False, init_bias=0.0):
+    shape = input_.get_shape().as_list()
+    ndim = len(shape)
+    stddev = min(1.0 / math.sqrt(shape[-1]), 0.1)
+    with tf.variable_scope(scope, reuse=reuse):
+        W = tf.get_variable("Matrix", [shape[-1], output_size], tf.float32, tf.random_normal_initializer(stddev=stddev))
+    X_shape = tf.gather(tf.shape(input_), list(range(ndim-1)))
+    target_shape = tf.concat(0, [X_shape, [output_size]]) # in original: axis stated after []
+    exp_input = tf.reshape(input_, [-1, shape[-1]])
+    if init_bias is None:
+        res = tf.matmul(exp_input, W)
+    else:
+        with tf.variable_scope(scope, reuse=reuse):
+            b = tf.get_variable("bias", [output_size], initializer=tf.constant_initializer(init_bias))
+        res = tf.matmul(exp_input, W) + b
+    res = tf.reshape(res, target_shape)
+    res.set_shape(shape[:-1] + [output_size])
+    return res
 
 batch_size = int(opts.batch_size)
 hidden_size = int(opts.hidden_size)
@@ -49,6 +73,8 @@ save_interval = int(opts.save_interval)
 verbose_test = bool(opts.verbose_test)
 interactive_mode = bool(opts.interactive)
 h5_suffix = opts.h5_suffix
+finetune = bool(opts.finetune)
+min_iterations = int(opts.min_iterations)
 
 if '2048' in h5_suffix:
     FP_len = 2048
@@ -84,6 +110,8 @@ def smi_to_fp(smi, radius=FP_rad, nBits=FP_len):
     return mol_to_fp(Chem.MolFromSmiles(smi), radius, nBits)
 
 gpu_options = tf.GPUOptions(allow_growth=True, visible_device_list=opts.device)
+print('available devices: ', tf.test.is_gpu_available())
+print("Using GPU options: ", gpu_options)
 with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as session:
     _input_mol = tf.placeholder(tf.float32, [batch_size*2, FP_len])
     sa_target = tf.placeholder(tf.float32, [batch_size*2,])
@@ -96,7 +124,7 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as session:
     input_mol.set_shape([batch_size*2, FP_len])
 
     mol_hiddens = tf.nn.relu(linearND(input_mol, hidden_size, scope="encoder0"))
-    for d in xrange(1, depth):
+    for d in range(1, depth):
         mol_hiddens = tf.nn.relu(linearND(mol_hiddens, hidden_size, scope="encoder%i"%d))
 
     score_sum = linearND(mol_hiddens, 1, scope="score_sum")
@@ -138,7 +166,7 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as session:
     tf.global_variables_initializer().run(session=session)
     size_func = lambda v: reduce(lambda x, y: x*y, v.get_shape().as_list())
     n = sum(size_func(v) for v in tf.trainable_variables())
-    print "Model size: %dK" % (n/1000,)
+    print("Model size: %dK" % (n/1000,))
 
     queue = Queue()
 
@@ -194,15 +222,15 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as session:
 
             # Try to get all FPs in one read (faster)
             if (it + batch_size) <= data_len:
-                src_batch = list(chain.from_iterable((data[i][2], data[i][3]) for i in xrange(it, it + batch_size)))
-                ids_batch = [data[i][0] for i in xrange(it, it + batch_size)]
+                src_batch = list(chain.from_iterable((data[i][2], data[i][3]) for i in range(it, it + batch_size)))
+                ids_batch = [data[i][0] for i in range(it, it + batch_size)]
                 src_mols[:, :] = data_fps[h5_offset+2*it:h5_offset+2*(it+batch_size), :]
                 it = it + batch_size
             # If we are at the end, do one-by-one)
             else:
                 src_batch = []
                 ids_batch = []
-                for i in xrange(batch_size):
+                for i in range(batch_size):
                     if it >= data_len:
                         src_batch.append(r)
                         src_batch.append(p)
@@ -267,8 +295,8 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as session:
 
             # Try to get all FPs in one read (faster)
             if (it + batch_size) <= data_len:
-                src_batch = list(chain.from_iterable((data[i][2], data[i][3]) for i in xrange(it, it + batch_size)))
-                ids_batch = [data[i][0] for i in xrange(it, it + batch_size)]
+                src_batch = list(chain.from_iterable((data[i][2], data[i][3]) for i in range(it, it + batch_size)))
+                ids_batch = [data[i][0] for i in range(it, it + batch_size)]
                 src_mols[:, :] = data_fps[h5_offset+2*it:h5_offset+2*(it+batch_size), :]
                 it = (it + batch_size) % data_len
 
@@ -276,7 +304,7 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as session:
             else:
                 src_batch = []
                 ids_batch = []
-                for i in xrange(batch_size):
+                for i in range(batch_size):
                     _id, n, r, p = data[it]
                     src_batch.append(r)
                     src_batch.append(p)
@@ -331,7 +359,7 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as session:
     try:
         if interactive_mode:
             
-            prompt = raw_input('enter a tag for this session: ')
+            prompt = input('enter a tag for this session: ')
             interactive_path = '%s.interactive.%s' % (restore_path, prompt.strip())
             fid = open(interactive_path, 'a')
 
@@ -361,7 +389,7 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as session:
 
             while True:
                 try:
-                    prompt = raw_input('\nEnter SMILES (or quit): ')
+                    prompt = input('\nEnter SMILES (or quit): ')
                     if prompt.strip() == 'quit':
                         break
                     if str('>') in prompt: # reaction
@@ -469,6 +497,8 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as session:
             
             while not coord.should_stop():               
                 it += 1
+                print('epoch:', it)
+                # FIXME: gets stuck here - not sure if due to only using CPU or what
                 _, cur_diff, cur_score, pnorm, gnorm, cur_loss = session.run([backprop, diff_score, score, param_norm, grad_norm, loss], feed_dict={_lr:lr})
                 (ids_batch, src_batch) = queue.get()
                 
@@ -477,6 +507,7 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as session:
                 sum_diff += np.sum(cur_diff)
                 sum_gnorm += gnorm
                 sum_loss += cur_loss
+                print('loss:', cur_loss, 'gnorm:', gnorm, 'pnorm:', pnorm, 'sum_loss:', sum_loss, 'sum_gnorm:', sum_gnorm)
                     
                 if it % min(report_interval, save_interval) == 0:
                     logstr = "it %06i [%09i pairs seen], AvgDiff: %.2f, FracDiffPos: %.3f, FracDiff%.2f: %.3f, PNorm: %.2f, GNorm: %.2f, Loss: %.4f" % \
@@ -501,13 +532,13 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as session:
                 if it % save_interval == 0:
                     lr *= 0.9
                     saver.save(session, opts.save_path + "/model.ckpt", global_step=it)
-                    print "Model Saved! Decaying learning rate"
+                    print("Model Saved! Decaying learning rate")
 
                 if it >= max(min_iterations, max_save * save_interval):
                     coord.request_stop()
 
     except Exception as e:
-        print e
+        print(e)
         coord.request_stop(e)
     finally:
         if not test and not interactive_mode: 
