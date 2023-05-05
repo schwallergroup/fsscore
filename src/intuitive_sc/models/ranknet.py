@@ -1,5 +1,5 @@
 """
-Implementation of the rankning algorithm RankNet adapted from molskill
+Implementation of the ranking algorithm RankNet adapted from molskill
 github repo: https://github.com/microsoft/molskill
 """
 from functools import partial
