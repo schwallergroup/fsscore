@@ -49,16 +49,16 @@ def linearND(input_, output_size, scope, reuse=False, init_bias=0.0):
     shape = input_.get_shape().as_list()
     ndim = len(shape)
     stddev = min(1.0 / math.sqrt(shape[-1]), 0.1)
-    with tf.variable_scope(scope, reuse=reuse):
-        W = tf.get_variable("Matrix", [shape[-1], output_size], tf.float32, tf.random_normal_initializer(stddev=stddev))
+    with tf.compat.v1.variable_scope(scope, reuse=reuse):
+        W = tf.compat.v1.get_variable("Matrix", [shape[-1], output_size], tf.float32, tf.random_normal_initializer(stddev=stddev))
     X_shape = tf.gather(tf.shape(input_), list(range(ndim-1)))
-    target_shape = tf.concat(0, [X_shape, [output_size]]) # in original: axis stated after []
+    target_shape = tf.concat([X_shape, [output_size]], 0)
     exp_input = tf.reshape(input_, [-1, shape[-1]])
     if init_bias is None:
         res = tf.matmul(exp_input, W)
     else:
-        with tf.variable_scope(scope, reuse=reuse):
-            b = tf.get_variable("bias", [output_size], initializer=tf.constant_initializer(init_bias))
+        with tf.compat.v1.variable_scope(scope, reuse=reuse):
+            b = tf.compat.v1.get_variable("bias", [output_size], initializer=tf.constant_initializer(init_bias))
         res = tf.matmul(exp_input, W) + b
     res = tf.reshape(res, target_shape)
     res.set_shape(shape[:-1] + [output_size])
@@ -109,12 +109,12 @@ def smi_to_fp(smi, radius=FP_rad, nBits=FP_len):
         return np.zeros((nBits,), dtype=np.float32)
     return mol_to_fp(Chem.MolFromSmiles(smi), radius, nBits)
 
-gpu_options = tf.GPUOptions(allow_growth=True, visible_device_list=opts.device)
-with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as session:
-    _input_mol = tf.placeholder(tf.float32, [batch_size*2, FP_len])
-    sa_target = tf.placeholder(tf.float32, [batch_size*2,])
+gpu_options = tf.compat.v1.GPUOptions(allow_growth=True, visible_device_list=opts.device)
+with tf.compat.v1.Session(config=tf.compat.v1.ConfigProto(gpu_options=gpu_options)) as session:
+    _input_mol = tf.compat.v1.placeholder(tf.float32, [batch_size*2, FP_len])
+    sa_target = tf.compat.v1.placeholder(tf.float32, [batch_size*2,])
 
-    q = tf.FIFOQueue(20, [tf.float32], shapes=[[batch_size*2, FP_len]]) # fixed size
+    q = tf.compat.v1.FIFOQueue(20, [tf.float32], shapes=[[batch_size*2, FP_len]]) # fixed size
     enqueue = q.enqueue(_input_mol)
     input_mol = q.dequeue()
     src_holder = [input_mol]
@@ -143,30 +143,34 @@ with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as session:
     loss = tf.reduce_sum(loss)
 
     # For normal reaction-wise training
-    _lr = tf.placeholder(tf.float32, [])
-    optimizer = tf.train.AdamOptimizer(learning_rate=_lr)
-    param_norm = tf.global_norm(tf.trainable_variables())
-    grads_and_vars = optimizer.compute_gradients(loss / batch_size)
-    grads, var = zip(*grads_and_vars)
-    grad_norm = tf.global_norm(grads)
+    _lr = tf.compat.v1.placeholder(tf.float32, [])
+    # optimizer = tf.train.AdamOptimizer(learning_rate=_lr)
+    optimizer = tf.optimizers.Adam(learning_rate=_lr)
+    param_norm = tf.compat.v1.global_norm(tf.compat.v1.trainable_variables())
+    with tf.GradientTape() as tape:
+        var = tf.compat.v1.trainable_variables()
+        grads = tape.gradient(loss / batch_size, var)
+    # grads_and_vars = optimizer.compute_gradients(loss / batch_size)
+    # grads, var = zip(*grads_and_vars)
+    grad_norm = tf.compat.v1.global_norm(grads)
     new_grads, _ = tf.clip_by_global_norm(grads, max_norm)
     grads_and_vars = zip(new_grads, var)
-    backprop = optimizer.apply_gradients(grads_and_vars)
+    backprop = optimizer.apply_gradients(grads_and_vars) # FIXME: ValueError: no gradients provided for any variable
 
-    # For training if exact values known (unused)
-    sse_grads_and_vars = optimizer.compute_gradients(sse / batch_size / 2.0)
-    sse_grads, sse_var = zip(*sse_grads_and_vars)
-    sse_grad_norm = tf.global_norm(sse_grads)
-    sse_new_grads, _ = tf.clip_by_global_norm(sse_grads, max_norm)
-    sse_grads_and_vars = zip(sse_new_grads, sse_var)
-    sse_backprop = optimizer.apply_gradients(sse_grads_and_vars)
+    # # For training if exact values known (unused)
+    # sse_grads_and_vars = optimizer.compute_gradients(sse / batch_size / 2.0)
+    # sse_grads, sse_var = zip(*sse_grads_and_vars)
+    # sse_grad_norm = tf.global_norm(sse_grads)
+    # sse_new_grads, _ = tf.clip_by_global_norm(sse_grads, max_norm)
+    # sse_grads_and_vars = zip(sse_new_grads, sse_var)
+    # sse_backprop = optimizer.apply_gradients(sse_grads_and_vars)
 
     # FIXME I assume here is the entry point for fine-tuning? or
     # further below where you restore?
     # can we just get a session from trained model and continue training?
-    tf.global_variables_initializer().run(session=session)
+    tf.compat.v1.global_variables_initializer().run(session=session)
     size_func = lambda v: reduce(lambda x, y: x*y, v.get_shape().as_list())
-    n = sum(size_func(v) for v in tf.trainable_variables())
+    n = sum(size_func(v) for v in tf.compat.v1.trainable_variables())
     print("Model size: %dK" % (n/1000,))
 
     queue = Queue()
