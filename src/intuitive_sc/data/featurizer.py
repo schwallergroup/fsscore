@@ -1,3 +1,6 @@
+"""
+Various featurizers for molecules. Script structure is inspired by molskill.
+"""
 import abc
 from functools import partial
 from typing import Dict, Type
@@ -5,6 +8,8 @@ from typing import Dict, Type
 import numpy as np
 import rdkit
 from rdkit.Chem import AllChem, DataStructs
+
+from intuitive_sc.data.molgraph import MolGraph
 
 
 class Featurizer(abc.ABC):
@@ -43,6 +48,7 @@ class FingerprintFeaturizer(Featurizer):
         return self.nbits
 
 
+# TODO what about dims?
 class GraphFeaturizer(Featurizer):
     def __init__(self) -> None:
         """Base graph featurizer class"""
@@ -95,6 +101,44 @@ class MorganFingerprint(FingerprintFeaturizer):
         return arr
 
 
+# TODO entry point to select specific features
+@register_featurizer(name="graph_2D")
+class Graph2DFeaturizer(GraphFeaturizer):
+    def __init__(self) -> None:
+        """Base class for 2D graph featurizer"""
+        super().__init__()
+
+    def get_feat(self, mol: rdkit.Chem.rdchem.Mol) -> Dict:
+        """Base method to compute graph features
+
+        Args:
+            mol (rdkit.Chem.rdchem.Mol): Molecule
+        """
+        graph_container = MolGraph()
+        return graph_container(mol)
+
+
+@register_featurizer(name="graph_3D")
+class Graph3DFeaturizer(GraphFeaturizer):
+    def __init__(self) -> None:
+        """Base class for 3D graph featurizer"""
+        super().__init__()
+
+    def get_feat(self, mol: rdkit.Chem.rdchem.Mol) -> Dict:
+        """Base method to compute graph features
+
+        Args:
+            mol (rdkit.Chem.rdchem.Mol): Molecule
+        """
+        graph_container = MolGraph(use_geometry=True)
+        return graph_container(mol)
+
+
+def get_featurizer(featurizer_name: str, **kwargs) -> Featurizer:
+    """Basic factory function for fp featurizers"""
+    return AVAILABLE_FEATURIZERS[featurizer_name](**kwargs)
+
+
 AVAILABLE_FEATURIZERS = AVAILABLE_FP_FEATURIZERS | AVAILABLE_GRAPH_FEATURIZERS
 
 if __name__ == "__main__":
@@ -103,3 +147,5 @@ if __name__ == "__main__":
     mol = rdkit.Chem.MolFromSmiles(smi)
     morgan = MorganFingerprint()
     print(morgan.get_feat(mol))
+    graph = GraphFeaturizer()
+    print(graph.get_feat(mol))
