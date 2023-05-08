@@ -59,6 +59,30 @@ def compute_metrics(
     }
 
 
+class FPEncoder(nn.Module):
+    def __init__(
+        self,
+        input_size: int = 2048,
+        hidden_size: int = 256,
+        dropout_p: float = 0.0,
+    ) -> None:
+        """Basic fingerprint encoder
+
+        Args:
+            input_size (int, optional): Descriptor size for each sample. Default 2048.
+            hidden_size (int, optional): Number of neurons in hidden layers.\
+                Default 256.
+            dropout_p (float, optional): Dropout probability. Defaults to 0.0.
+        """
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(input_size, hidden_size), nn.Dropout(dropout_p), nn.ReLU()
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.encoder(x)
+
+
 class RankNet(nn.Module):
     def __init__(
         self,
@@ -66,6 +90,8 @@ class RankNet(nn.Module):
         hidden_size: int = 256,
         n_layers: int = 3,
         dropout_p: float = 0.0,
+        encoder: Optional[nn.Module] = None,
+        fp: bool = False,
     ) -> None:
         """Basic RankNet implementation. Pairs of samples are classified
         according to sigmoid(s_i - s_j) where s_i, s_j are scores learned
@@ -79,11 +105,15 @@ class RankNet(nn.Module):
             dropout_p (float, optional): Dropout probability. Defaults to 0.0.
         """
         super(RankNet, self).__init__()
-        # TODO mgiht want to change the encoder so that is based on graph;
-        # take out of class and input encoded graph directly
-        self.encoder = nn.Sequential(
-            nn.Linear(input_size, hidden_size), nn.Dropout(dropout_p), nn.ReLU()
-        )
+        self.fp = fp
+        if self.fp:
+            self.encoder = FPEncoder(
+                input_size=input_size,
+                hidden_size=hidden_size,
+                dropout_p=dropout_p,
+            )
+        else:
+            self.encoder = encoder
 
         for _ in range(n_layers):
             self.encoder.append(nn.Linear(hidden_size, hidden_size))
@@ -110,6 +140,7 @@ class RankNet(nn.Module):
             return self.encoder(x)
 
 
+# TODO will have to add Union for different input types (graphs and FP)
 class LitRankNet(pl.LightningModule):
     def __init__(
         self,
@@ -122,6 +153,8 @@ class LitRankNet(pl.LightningModule):
         dropout_p: float = 0.0,
         mc_dropout_samples: int = 1,
         sigmoid: bool = False,
+        encoder: Optional[nn.Module] = None,  # TODO put some GNN as default
+        fp: bool = False,
     ) -> None:
         """Main RankNet Lightning module
 
@@ -145,7 +178,11 @@ class LitRankNet(pl.LightningModule):
                 Defaults to False.
         """
         super().__init__()
-        self.net = RankNet(input_size=input_size) if net is None else net
+        self.net = (
+            RankNet(input_size=input_size, encoder=encoder, fp=fp)
+            if net is None
+            else net
+        )
         self.loss_fn = loss_fn
         self.regularization_factor = regularization_factor
         self.lr = lr
@@ -153,6 +190,7 @@ class LitRankNet(pl.LightningModule):
         self.dropout_p = dropout_p
         self.mc_dropout_samples = mc_dropout_samples
         self.sigmoid = sigmoid
+        self.fp = fp
 
     @staticmethod
     def get_reg_loss(
