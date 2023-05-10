@@ -54,6 +54,8 @@ class GraphFeaturizer(Featurizer):
         """Base graph featurizer class"""
         super().__init__()
 
+    # TODO figure out dimensions thing!
+
 
 AVAILABLE_FP_FEATURIZERS: Dict[str, Type[FingerprintFeaturizer]] = {}
 AVAILABLE_GRAPH_FEATURIZERS: Dict[str, Type[GraphFeaturizer]] = {}

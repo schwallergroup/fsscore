@@ -153,7 +153,7 @@ class SingleDataset(PairDataset):
     ) -> None:
         """
         Same as `BaseDataset` but assuming `molrpr` is going
-        to contain a list of molecular representations
+        to contain a list of one molecular representation
         """
         super().__init__(
             molrpr=molrpr,
