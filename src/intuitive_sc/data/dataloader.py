@@ -22,7 +22,7 @@ def get_dataloader(
     shuffle: bool = False,
     featurizer: Optional[Featurizer] = None,
     num_workers: Optional[int] = None,
-    read_f: Callable = Chem.MolFromSmiles,
+    read_fn: Callable = Chem.MolFromSmiles,
 ) -> DataLoader:
     """Creates a pytorch dataloader from a list of molecular representations (SMILES).
 
@@ -34,21 +34,21 @@ def get_dataloader(
         featurizer: Default to 2D graph
         num_workers: Number of processes to use during dataloading.\
             Default is half of the available cores.
-        read_f: rdkit function to read molecules
+        read_fn: rdkit function to read molecules
     """
     if isinstance(molrpr[0], (list, tuple)):
         data = PairDataset(
             molrpr=molrpr,
             target=target,
             featurizer=featurizer,
-            read_f=read_f,
+            read_fn=read_fn,
         )
     elif isinstance(molrpr[0], str):
         data = SingleDataset(
             molrpr=molrpr,
             target=target,
             featurizer=featurizer,
-            read_f=read_f,
+            read_fn=read_fn,
         )
     else:
         raise ValueError(
@@ -67,7 +67,7 @@ class BaseDataset(Dataset, abc.ABC):
         self,
         molrpr: List,
         target: Optional[Union[List, np.ndarray]] = None,
-        read_f: Callable = Chem.MolFromSmiles,
+        read_fn: Callable = Chem.MolFromSmiles,
         featurizer: Optional[Featurizer] = None,
     ) -> None:
         """Base dataset class
@@ -77,13 +77,13 @@ class BaseDataset(Dataset, abc.ABC):
                            tuples (length 2) of molecular representations.
             target: A list of target values for ach molecule present in `molrpr`.\
                 Defaults to None.
-            read_f: Function to use to read items in `molrpr`.\
+            read_fn: Function to use to read items in `molrpr`.\
                 Defaults to MolFromSmiles.
             featurizer: Featurizer to use. Defaults to None.
         """
         self.molrpr = molrpr
         self.target = target
-        self.read_f = read_f
+        self.read_fn = read_fn
         super().__init__()
 
         if featurizer is None:
@@ -106,7 +106,7 @@ class PairDataset(BaseDataset):
         self,
         molrpr: List,
         target: Optional[Union[List, np.ndarray]] = None,
-        read_f: Callable = Chem.MolFromSmiles,
+        read_fn: Callable = Chem.MolFromSmiles,
         featurizer: Optional[Featurizer] = None,
     ) -> None:
         """
@@ -116,7 +116,7 @@ class PairDataset(BaseDataset):
         super().__init__(
             molrpr=molrpr,
             target=target,
-            read_f=read_f,
+            read_fn=read_fn,
             featurizer=featurizer,
         )
 
@@ -129,7 +129,7 @@ class PairDataset(BaseDataset):
         Tuple[Tuple[Dict, Dict], torch.Tensor],
     ]:
         molrpr_index = self.molrpr[index]
-        mol_i, mol_j = self.read_f(molrpr_index[0]), self.read_f(molrpr_index[1])
+        mol_i, mol_j = self.read_fn(molrpr_index[0]), self.read_fn(molrpr_index[1])
         desc_i, desc_j = self.get_desc(mol_i), self.get_desc(mol_j)
         if self.target is not None:
             target = torch.FloatTensor([self.target[index]])
@@ -148,7 +148,7 @@ class SingleDataset(PairDataset):
         self,
         molrpr: List,
         target: Optional[Union[List, np.ndarray]] = None,
-        read_f: Callable = Chem.MolFromSmiles,
+        read_fn: Callable = Chem.MolFromSmiles,
         featurizer: Optional[Featurizer] = None,
     ) -> None:
         """
@@ -158,7 +158,7 @@ class SingleDataset(PairDataset):
         super().__init__(
             molrpr=molrpr,
             target=target,
-            read_f=read_f,
+            read_fn=read_fn,
             featurizer=featurizer,
         )
 
@@ -171,7 +171,7 @@ class SingleDataset(PairDataset):
         Tuple[Dict, torch.Tensor],
     ]:
         molrpr_index = self.molrpr[index]
-        mol = self.read_f(molrpr_index)
+        mol = self.read_fn(molrpr_index)
         desc = self.get_desc(mol)
         if self.target is not None:
             target = torch.FloatTensor([self.target[index]])

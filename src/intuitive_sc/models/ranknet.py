@@ -107,10 +107,12 @@ class RankNet(nn.Module):
         super(RankNet, self).__init__()
         self.fp = fp
         if self.fp:
-            self.encoder = FPEncoder(
-                input_size=input_size,
-                hidden_size=hidden_size,
-                dropout_p=dropout_p,
+            self.encoder = nn.Sequential(
+                FPEncoder(
+                    input_size=input_size,
+                    hidden_size=hidden_size,
+                    dropout_p=dropout_p,
+                )
             )
         else:
             self.encoder = encoder
@@ -122,12 +124,10 @@ class RankNet(nn.Module):
         self.encoder.append(nn.Linear(hidden_size, 1))
 
     def forward(
-        self, x_i: torch.Tensor, x_j: torch.Tensor, sigmoid: bool = False
+        self, x_i: torch.Tensor, x_j: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         score_i, score_j = self.encoder(x_i), self.encoder(x_j)
         out = score_i - score_j
-        if sigmoid:
-            out = torch.sigmoid(out)
         return score_i, score_j, out
 
     def score(self, x: torch.Tensor) -> torch.Tensor:
@@ -146,13 +146,12 @@ class LitRankNet(pl.LightningModule):
         self,
         net: Optional[RankNet] = None,
         input_size: int = 2048,
-        loss_fn: Callable = F.binary_cross_entropy_with_logits,
+        loss_fn: Callable = F.binary_cross_entropy_with_logits,  # applies sigmoid
         regularization_factor: float = 0.0,
         lr: float = 3e-4,
         target_prob: bool = False,
         dropout_p: float = 0.0,
         mc_dropout_samples: int = 1,
-        sigmoid: bool = False,
         encoder: Optional[nn.Module] = None,  # TODO put some GNN as default
         fp: bool = False,
     ) -> None:
@@ -174,8 +173,6 @@ class LitRankNet(pl.LightningModule):
             dropout_p (float, optional): Dropout probability. Defaults to 0.0.
             mc_dropout_samples (int, optional): Number of MC dropout samples.\
                 Defaults to 1.
-            sigmoid (bool, optional): Whether to use a sigmoid function on the output.\
-                Defaults to False.
         """
         super().__init__()
         self.net = (
@@ -189,8 +186,9 @@ class LitRankNet(pl.LightningModule):
         self.target_prob = target_prob
         self.dropout_p = dropout_p
         self.mc_dropout_samples = mc_dropout_samples
-        self.sigmoid = sigmoid
         self.fp = fp
+
+        self.save_hyperparameters()
 
     @staticmethod
     def get_reg_loss(
@@ -286,7 +284,7 @@ class LitRankNet(pl.LightningModule):
         """
         if isinstance(new_batch, Sequence):
             if isinstance(new_batch[0], Sequence):
-                pred_fun = partial(self.net, sigmoid=self.sigmoid)
+                pred_fun = partial(self.net)
             elif isinstance(new_batch[0], torch.Tensor):
                 pred_fun = self.net.score
             else:

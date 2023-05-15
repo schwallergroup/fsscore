@@ -3,7 +3,8 @@ import os
 from typing import Callable, List, Optional, Tuple
 
 import pandas as pd
-from pytorch_lightning.utilities.seed import seed_everything
+import pytorch_lightning as pl
+import torch.nn.functional as F
 from rdkit import Chem
 from sklearn.model_selection import train_test_split
 
@@ -37,13 +38,13 @@ def train(
     seed: Optional[int] = None,
     batch_size: int = 32,
     num_workers: Optional[int] = None,
-    read_f: Callable = Chem.MolFromSmiles,
+    read_fn: Callable = Chem.MolFromSmiles,
     mc_dropout_samples: int = 1,
     dropout_p: float = 0.0,
-    sigmoid: bool = False,
+    loss_fn: Callable = F.binary_cross_entropy_with_logits,
 ) -> None:
     """
-    Trains a RankNet model.
+    Trains a model to rank molecules.
 
     Args:
         smiles: List of tuples of SMILES strings
@@ -60,7 +61,10 @@ def train(
         seed: Random seed
         batch_size: Batch size
         num_workers: Number of workers
-        read_f: rdkit function to read molecules
+        read_fn: rdkit function to read molecules
+        mc_dropout_samples: Number of MC dropout samples
+        dropout_p: Dropout probability
+        loss_fn: Loss function
     """
     # get dataloaders
     if val_size > 0:
@@ -73,7 +77,7 @@ def train(
             batch_size=batch_size,
             featurizer=featurizer,
             num_workers=num_workers,
-            read_f=read_f,
+            read_fn=read_fn,
         )
         dataloader_val = get_dataloader(
             smiles_val,
@@ -81,7 +85,7 @@ def train(
             batch_size=batch_size,
             featurizer=featurizer,
             num_workers=num_workers,
-            read_f=read_f,
+            read_fn=read_fn,
         )
     else:
         dataloader_train = get_dataloader(
@@ -90,7 +94,7 @@ def train(
             batch_size=batch_size,
             featurizer=featurizer,
             num_workers=num_workers,
-            read_f=read_f,
+            read_fn=read_fn,
         )
         dataloader_val = None
         LOGGER.info("No validation set. Trains on full dataset (for production).")
@@ -103,11 +107,10 @@ def train(
         reg_factor=regularization_factor,
         n_epochs=n_epochs,
         log_every=log_every,
-        loss_fn="mse",  # TODO set up different losses
+        loss_fn=loss_fn,
         mc_dropout_samples=mc_dropout_samples,
         dropout_p=dropout_p,
         encoder=graph_encoder,
-        sigmoid=sigmoid,
         use_fp=use_fp,
     )
 
@@ -235,18 +238,26 @@ if __name__ == "__main__":
         default=0.0,
     )
     parser.add_argument(
-        "--sigmoid",
+        "--hinge_loss",
         action="store_true",
-        help="Whether to use sigmoid activation for output layer",
+        help="Whether to use hinge loss",
+    )
+    parser.add_argument(
+        "--subsample",
+        type=int,
+        help="Subsample the dataset (absolute number)",
+        default=None,
     )
 
     args = parser.parse_args()
 
     os.makedirs(MODEL_PATH, exist_ok=True)
 
-    seed_everything(args.seed)
+    pl.seed_everything(args.seed, workers=True)
 
     df = pd.read_csv(args.data_path)
+    if args.subsample is not None:
+        df = df.sample(args.subsample)
     smiles_pairs = df[args.compound_cols].values.tolist()  # TODO check this works
     target = df[args.rating_col].values.tolist()
 
@@ -268,5 +279,6 @@ if __name__ == "__main__":
         num_workers=args.num_workers,
         mc_dropout_samples=args.mc_dropout_samples,
         dropout_p=args.dropout_p,
-        sigmoid=args.sigmoid,
+        # TODO import class for hinge loss
+        loss_fn="hinge" if args.hinge_loss else F.binary_cross_entropy_with_logits,
     )

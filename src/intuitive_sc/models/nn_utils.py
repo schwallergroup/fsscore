@@ -18,9 +18,8 @@ def get_new_model_and_trainer(
     loss_fn: Callable = F.binary_cross_entropy_with_logits,
     mc_dropout_samples: int = 1,
     dropout_p: float = 0.0,
-    sigmoid: bool = False,
     encoder: Optional[str] = None,
-    fp: bool = False,
+    use_fp: bool = False,
 ) -> Tuple[LitRankNet, pl.Trainer]:
     """
     Creates a new RankNet model and trainer.
@@ -36,7 +35,7 @@ def get_new_model_and_trainer(
         dropout_p: Dropout probability
         sigmoid: Whether to use sigmoid
         encoder: Encoder to use
-        fp: Whether to use fingerprints
+        use_fp: Whether to use fingerprints
 
     Returns:
         Tuple of model and trainer
@@ -63,7 +62,7 @@ def get_new_model_and_trainer(
         n_layers=3,  # TODO hard coded
         dropout_p=dropout_p,
         encoder=encoder,
-        fp=fp,
+        fp=use_fp,
     )
     model = LitRankNet(
         net=net,
@@ -73,9 +72,8 @@ def get_new_model_and_trainer(
         input_size=input_size,
         mc_dropout_samples=mc_dropout_samples,
         dropout_p=dropout_p,
-        sigmoid=sigmoid,
         encoder=encoder,
-        fp=fp,
+        fp=use_fp,
     )
     trainer = pl.Trainer(
         logger=logger,
@@ -84,6 +82,7 @@ def get_new_model_and_trainer(
         max_epochs=n_epochs,
         log_every_n_steps=log_every,
         callbacks=[ckpt],
+        deterministic=True,
     )
 
     return model, trainer
