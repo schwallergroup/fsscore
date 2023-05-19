@@ -1,6 +1,7 @@
 """ Dataloader infrastructure adapted from Microsoft's molskill"""
 import abc
 import multiprocessing
+import warnings
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -8,9 +9,20 @@ import rdkit
 import torch
 from rdkit import Chem
 from torch.utils.data import DataLoader, Dataset
+from torch_geometric.data import DataLoader as GraphDataLoader
 
-from intuitive_sc.data.featurizer import Featurizer, get_featurizer
+from intuitive_sc.data.featurizer import (
+    Featurizer,
+    FingerprintFeaturizer,
+    GraphFeaturizer,
+    get_featurizer,
+)
+from intuitive_sc.data.graph_dataset import GraphData
 from intuitive_sc.utils.logging import get_logger
+
+warnings.filterwarnings(
+    "ignore", category=UserWarning, message="TypedStorage is deprecated"
+)
 
 LOGGER = get_logger(__name__)
 
@@ -23,6 +35,7 @@ def get_dataloader(
     featurizer: Optional[Featurizer] = None,
     num_workers: Optional[int] = None,
     read_fn: Callable = Chem.MolFromSmiles,
+    graphset: bool = False,
 ) -> DataLoader:
     """Creates a pytorch dataloader from a list of molecular representations (SMILES).
 
@@ -57,9 +70,18 @@ def get_dataloader(
 
     if num_workers is None:
         num_workers = multiprocessing.cpu_count() // 2
-    return DataLoader(
-        data, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers
-    )
+
+    if graphset:
+        return GraphDataLoader(
+            data, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers
+        )
+    else:
+        return DataLoader(
+            data,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            num_workers=num_workers,
+        )
 
 
 class BaseDataset(Dataset, abc.ABC):
@@ -129,18 +151,22 @@ class PairDataset(BaseDataset):
         Tuple[Tuple[Dict, Dict], torch.Tensor],
     ]:
         molrpr_index = self.molrpr[index]
-        mol_i, mol_j = self.read_fn(molrpr_index[0]), self.read_fn(molrpr_index[1])
-        desc_i, desc_j = self.get_desc(mol_i), self.get_desc(mol_j)
+        smi_i, smi_j = molrpr_index[0], molrpr_index[1]
+        mol_i, mol_j = self.read_fn(smi_i), self.read_fn(smi_j)
+        desc_i, desc_j = self.get_desc(mol_i, smi_i), self.get_desc(mol_j, smi_j)
         if self.target is not None:
             target = torch.FloatTensor([self.target[index]])
             return (desc_i, desc_j), target
         else:
             return (desc_i, desc_j)
 
-    def get_desc(self, mol: rdkit.Chem.rdchem.Mol):
-        # TODO this will not work with graphs where a dict is returned
-        # work with isinstance?
-        return torch.from_numpy(self.featurizer.get_feat(mol))
+    def get_desc(
+        self, mol: rdkit.Chem.rdchem.Mol, smiles: str
+    ) -> Union[torch.Tensor, GraphData]:
+        if isinstance(self.featurizer, FingerprintFeaturizer):
+            return torch.from_numpy(self.featurizer.get_feat(mol))
+        elif isinstance(self.featurizer, GraphFeaturizer):
+            return self.featurizer.get_feat(smiles=smiles)
 
 
 class SingleDataset(PairDataset):
@@ -172,7 +198,7 @@ class SingleDataset(PairDataset):
     ]:
         molrpr_index = self.molrpr[index]
         mol = self.read_fn(molrpr_index)
-        desc = self.get_desc(mol)
+        desc = self.get_desc(mol, molrpr_index)
         if self.target is not None:
             target = torch.FloatTensor([self.target[index]])
             return desc, target

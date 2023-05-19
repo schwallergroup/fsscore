@@ -13,6 +13,8 @@ import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score
 from torch.optim import Adam
 
+from intuitive_sc.models.gnn import AVAILABLE_GRAPH_ENCODERS
+
 _NOT_RECOGNISED_INPUT_TYPE = ValueError(
     "Not recognised input format, should be either tensor or tuple of tensors"
 )
@@ -92,6 +94,7 @@ class RankNet(nn.Module):
         dropout_p: float = 0.0,
         encoder: Optional[nn.Module] = None,
         fp: bool = False,
+        use_geom: bool = False,
     ) -> None:
         """Basic RankNet implementation. Pairs of samples are classified
         according to sigmoid(s_i - s_j) where s_i, s_j are scores learned
@@ -103,6 +106,10 @@ class RankNet(nn.Module):
                 Default 256.
             n_layers (int, optional): Number of hidden layers. Defaults to 3.
             dropout_p (float, optional): Dropout probability. Defaults to 0.0.
+            encoder (Optional[nn.Module], optional): Encoder module. Defaults to None.
+            fp (bool, optional): Whether to use a fingerprint encoder. \
+                Defaults to False.
+            use_geom (bool, optional): Whether to use geometric mean. Defaults to False.
         """
         super(RankNet, self).__init__()
         self.fp = fp
@@ -115,7 +122,15 @@ class RankNet(nn.Module):
                 )
             )
         else:
-            self.encoder = encoder
+            self.encoder = nn.Sequential(
+                AVAILABLE_GRAPH_ENCODERS[encoder](
+                    input_dim=input_size,
+                    hidden_dim=hidden_size // 2,  # readoutphase: concats two readouts
+                    dropout=dropout_p,
+                    num_heads=8,  # TODO hard-coded: att heads got GATv2 layers
+                    use_geom=use_geom,
+                )
+            )
 
         for _ in range(n_layers):
             self.encoder.append(nn.Linear(hidden_size, hidden_size))
@@ -152,8 +167,9 @@ class LitRankNet(pl.LightningModule):
         target_prob: bool = False,
         dropout_p: float = 0.0,
         mc_dropout_samples: int = 1,
-        encoder: Optional[nn.Module] = None,  # TODO put some GNN as default
+        encoder: Optional[nn.Module] = None,
         fp: bool = False,
+        use_geom: bool = False,
     ) -> None:
         """Main RankNet Lightning module
 
@@ -173,10 +189,14 @@ class LitRankNet(pl.LightningModule):
             dropout_p (float, optional): Dropout probability. Defaults to 0.0.
             mc_dropout_samples (int, optional): Number of MC dropout samples.\
                 Defaults to 1.
+            encoder (Optional[nn.Module], optional): Graph encoder. Defaults to None.
+            fp (bool, optional): Whether to use a fingerprint encoder.\
+                Defaults to False.
+            use_geom (bool, optional): Whether to use geometric mean. Defaults to False.
         """
         super().__init__()
         self.net = (
-            RankNet(input_size=input_size, encoder=encoder, fp=fp)
+            RankNet(input_size=input_size, encoder=encoder, fp=fp, use_geom=use_geom)
             if net is None
             else net
         )

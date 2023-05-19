@@ -11,9 +11,12 @@ from sklearn.model_selection import train_test_split
 from intuitive_sc.data.dataloader import get_dataloader
 from intuitive_sc.data.featurizer import (
     AVAILABLE_FEATURIZERS,
-    Featurizer,
+    AVAILABLE_FP_FEATURIZERS,
+    AVAILABLE_GRAPH_FEATURIZERS,
     get_featurizer,
 )
+from intuitive_sc.data.graph_dataset import GraphDataset
+from intuitive_sc.models.gnn import AVAILABLE_GRAPH_ENCODERS
 from intuitive_sc.models.nn_utils import get_new_model_and_trainer
 from intuitive_sc.utils.logging import get_logger
 from intuitive_sc.utils.paths import DATA_PATH, MODEL_PATH
@@ -26,8 +29,8 @@ LOGGER = get_logger(__name__)
 def train(
     smiles: List[Tuple[str, str]],
     target: List[float],
+    graph_datapath: Optional[str] = None,
     save_dir: Optional[str] = None,
-    featurizer: Optional[Featurizer] = None,
     graph_encoder: Optional[str] = None,
     use_fp: bool = False,
     lr: float = 3e-4,
@@ -42,6 +45,7 @@ def train(
     mc_dropout_samples: int = 1,
     dropout_p: float = 0.0,
     loss_fn: Callable = F.binary_cross_entropy_with_logits,
+    resume_training: bool = False,
 ) -> None:
     """
     Trains a model to rank molecules.
@@ -66,6 +70,24 @@ def train(
         dropout_p: Dropout probability
         loss_fn: Loss function
     """
+    use_geom = False  # TODO build option to use 3D graphs
+    if not use_fp:
+        # create graph dataset so not have to compute graph features every time
+        LOGGER.info("Getting graph dataset.")
+        smiles_all = [s for pair in smiles for s in pair]
+        smiles_all = list(set(smiles_all))
+        graph_dataset = GraphDataset(
+            smiles=smiles_all,
+            processed_path=graph_datapath,
+            # ids=None, TODO rn ids are smiles
+            use_geom=use_geom,
+        )
+        graph_dataset.transform(depth=1)  # TODO args for this (n layers of readout)
+        featurizer = get_featurizer(args.featurizer, graph_dataset=graph_dataset)
+    else:
+        graph_dataset = None
+        featurizer = get_featurizer(args.featurizer, nbits=2048)
+
     # get dataloaders
     if val_size > 0:
         smiles_train, smiles_val, target_train, target_val = train_test_split(
@@ -78,6 +100,7 @@ def train(
             featurizer=featurizer,
             num_workers=num_workers,
             read_fn=read_fn,
+            graphset=True if graph_dataset is not None else False,
         )
         dataloader_val = get_dataloader(
             smiles_val,
@@ -86,6 +109,7 @@ def train(
             featurizer=featurizer,
             num_workers=num_workers,
             read_fn=read_fn,
+            graphset=True if graph_dataset is not None else False,
         )
     else:
         dataloader_train = get_dataloader(
@@ -95,6 +119,7 @@ def train(
             featurizer=featurizer,
             num_workers=num_workers,
             read_fn=read_fn,
+            graphset=True if graph_dataset is not None else False,
         )
         dataloader_val = None
         LOGGER.info("No validation set. Trains on full dataset (for production).")
@@ -102,7 +127,7 @@ def train(
     # get model and trainer
     model, trainer = get_new_model_and_trainer(
         save_dir=save_dir,
-        input_size=dataloader_train.dataset.featurizer.dim(),  # TODO fix for graphs
+        input_size=dataloader_train.dataset.featurizer.dim(),
         lr=lr,
         reg_factor=regularization_factor,
         n_epochs=n_epochs,
@@ -112,11 +137,12 @@ def train(
         dropout_p=dropout_p,
         encoder=graph_encoder,
         use_fp=use_fp,
+        use_geom=use_geom,
     )
 
     # access last checkpoint
     model_ckpt = os.path.join(save_dir, "checkpoints", "last.ckpt")
-    if os.path.exists(model_ckpt):
+    if os.path.exists(model_ckpt) and resume_training:
         LOGGER.info(f"Found checkpoint in {model_ckpt}, resuming training.")
     else:
         model_ckpt = None
@@ -141,6 +167,12 @@ if __name__ == "__main__":
         help="Path to the csv file. Must contain columns 'smiles_i', 'smiles_j'\
             and 'target'",
         default=os.path.join(DATA_PATH, "data.csv"),
+    )
+    parser.add_argument(
+        "--graph_datapath",
+        type=str,
+        help="Path to the pt file with featurized graphs and SMILES as ID.",
+        default="",
     )
     parser.add_argument(
         "--compound_cols",
@@ -168,7 +200,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--graph_encoder",
-        choices=["GCN", "GAT", "GIN"],  # TODO add actual list here from models
+        choices=list(AVAILABLE_GRAPH_ENCODERS.keys()),
         help="Name of the graph encoder to use",
         default="GCN",
     )
@@ -248,8 +280,22 @@ if __name__ == "__main__":
         help="Subsample the dataset (absolute number)",
         default=None,
     )
+    parser.add_argument(
+        "--resume_training",
+        action="store_true",
+        help="Whether to resume training from last checkpoint",
+    )
 
     args = parser.parse_args()
+
+    if args.use_fp and args.featurizer in list(AVAILABLE_GRAPH_FEATURIZERS.keys()):
+        raise ValueError(
+            f"Cannot use fingerprints with graph featurizer {args.featurizer}"
+        )
+    elif not args.use_fp and args.featurizer in list(AVAILABLE_FP_FEATURIZERS.keys()):
+        raise ValueError(
+            f"Cannot use FP featurizer {args.featurizer} without fingerprints"
+        )
 
     os.makedirs(MODEL_PATH, exist_ok=True)
 
@@ -261,12 +307,15 @@ if __name__ == "__main__":
     smiles_pairs = df[args.compound_cols].values.tolist()  # TODO check this works
     target = df[args.rating_col].values.tolist()
 
-    featurizer = get_featurizer(args.featurizer)
+    if not os.path.exists(args.graph_datapath) and not args.use_fp:
+        data_name = os.path.basename(args.data_path).split(".")[0]
+        args.graph_datapath = os.path.join(DATA_PATH, f"{data_name}_graphs.pt")
+
     train(
         smiles=smiles_pairs,
         target=target,
+        graph_datapath=args.graph_datapath,
         save_dir=args.save_dir,
-        featurizer=featurizer,
         graph_encoder=args.graph_encoder,
         use_fp=args.use_fp,
         lr=args.lr,
@@ -281,4 +330,5 @@ if __name__ == "__main__":
         dropout_p=args.dropout_p,
         # TODO import class for hinge loss
         loss_fn="hinge" if args.hinge_loss else F.binary_cross_entropy_with_logits,
+        resume_training=args.resume_training,
     )

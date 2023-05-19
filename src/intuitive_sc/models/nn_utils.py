@@ -20,6 +20,7 @@ def get_new_model_and_trainer(
     dropout_p: float = 0.0,
     encoder: Optional[str] = None,
     use_fp: bool = False,
+    use_geom: bool = False,
 ) -> Tuple[LitRankNet, pl.Trainer]:
     """
     Creates a new RankNet model and trainer.
@@ -36,6 +37,7 @@ def get_new_model_and_trainer(
         sigmoid: Whether to use sigmoid
         encoder: Encoder to use
         use_fp: Whether to use fingerprints
+        use_geom: Whether to use geometry
 
     Returns:
         Tuple of model and trainer
@@ -63,6 +65,7 @@ def get_new_model_and_trainer(
         dropout_p=dropout_p,
         encoder=encoder,
         fp=use_fp,
+        use_geom=use_geom,
     )
     model = LitRankNet(
         net=net,
@@ -74,6 +77,7 @@ def get_new_model_and_trainer(
         dropout_p=dropout_p,
         encoder=encoder,
         fp=use_fp,
+        use_geom=use_geom,
     )
     trainer = pl.Trainer(
         logger=logger,
@@ -82,7 +86,7 @@ def get_new_model_and_trainer(
         max_epochs=n_epochs,
         log_every_n_steps=log_every,
         callbacks=[ckpt],
-        deterministic=True,
+        deterministic=False,  # some components cannot be deterministic
     )
 
     return model, trainer

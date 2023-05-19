@@ -3,12 +3,13 @@ Various featurizers for molecules. Script structure is inspired by molskill.
 """
 import abc
 from functools import partial
-from typing import Dict, Type
+from typing import Dict, Type, Union
 
 import numpy as np
 import rdkit
 from rdkit.Chem import AllChem, DataStructs
 
+from intuitive_sc.data.graph_dataset import GraphData, GraphDataset
 from intuitive_sc.data.molgraph import MolGraph
 
 
@@ -48,13 +49,10 @@ class FingerprintFeaturizer(Featurizer):
         return self.nbits
 
 
-# TODO what about dims?
 class GraphFeaturizer(Featurizer):
     def __init__(self) -> None:
         """Base graph featurizer class"""
         super().__init__()
-
-    # TODO figure out dimensions thing!
 
 
 AVAILABLE_FP_FEATURIZERS: Dict[str, Type[FingerprintFeaturizer]] = {}
@@ -80,7 +78,7 @@ class MorganFingerprint(FingerprintFeaturizer):
     def __init__(
         self, nbits: int = 2048, bond_radius: int = 2, count: bool = False
     ) -> None:
-        """Base class for Morgan fingerprinting featurizer
+        """Base class for Morgan fingerprinting featurizer.
 
         Args:
             bond_radius (int, optional): Bond radius. Defaults to 2.
@@ -106,34 +104,70 @@ class MorganFingerprint(FingerprintFeaturizer):
 # TODO entry point to select specific features
 @register_featurizer(name="graph_2D")
 class Graph2DFeaturizer(GraphFeaturizer):
-    def __init__(self) -> None:
-        """Base class for 2D graph featurizer"""
+    def __init__(self, graph_dataset: GraphDataset = None) -> None:
+        """Base class for 2D graph featurizer
+        Args:
+            graph_dataset (GraphDataset, optional): Loaded graph dataset.
+        """
+        self.graph_dataset = graph_dataset
         super().__init__()
 
-    def get_feat(self, mol: rdkit.Chem.rdchem.Mol) -> Dict:
-        """Base method to compute graph features
+    def get_feat(
+        self, mol: rdkit.Chem.rdchem.Mol = None, smiles: str = None
+    ) -> Union[Dict, GraphData]:
+        """Base method to compute graph features. If graph_dataset is provided,
+        the graph is loaded from the dataset. Otherwise, the graph is computed
+        from the SMILES string (does not yet work in training).
 
         Args:
             mol (rdkit.Chem.rdchem.Mol): Molecule
+            smiles (str): SMILES string
         """
-        graph_container = MolGraph()
-        return graph_container(mol)
+        if self.graph_dataset is not None:
+            return self.graph_dataset.get_data(ID=smiles)
+        else:
+            if mol is None:
+                mol = rdkit.Chem.MolFromSmiles(smiles)
+            graph_container = MolGraph()
+            return graph_container(mol)
+
+    # TODO check if this is the correct dim that we need for the model
+    def dim(self) -> int:
+        """Size of the returned feature"""
+        return self.graph_dataset.node_dim
 
 
 @register_featurizer(name="graph_3D")
 class Graph3DFeaturizer(GraphFeaturizer):
-    def __init__(self) -> None:
-        """Base class for 3D graph featurizer"""
+    def __init__(self, graph_dataset: GraphDataset = None) -> None:
+        """Base class for 3D graph featurizer
+
+        Args:
+            graph_dataset (GraphDataset, optional): Loaded graph dataset.
+        """
+        self.graph_dataset = graph_dataset
         super().__init__()
 
-    def get_feat(self, mol: rdkit.Chem.rdchem.Mol) -> Dict:
+    def get_feat(
+        self, mol: rdkit.Chem.rdchem.Mol = None, smiles: str = None
+    ) -> Union[Dict, GraphData]:
         """Base method to compute graph features
 
         Args:
             mol (rdkit.Chem.rdchem.Mol): Molecule
+            smiles (str): SMILES string
         """
-        graph_container = MolGraph(use_geometry=True)
-        return graph_container(mol)
+        if self.graph_dataset is not None:
+            return self.graph_dataset.get_data(smiles)
+        else:
+            if mol is None:
+                mol = rdkit.Chem.MolFromSmiles(smiles)
+            graph_container = MolGraph(use_geometry=True)
+            return graph_container(mol)
+
+    def dim(self) -> int:
+        """Size of the returned feature"""
+        return self.graph_dataset.node_dim
 
 
 def get_featurizer(featurizer_name: str, **kwargs) -> Featurizer:
