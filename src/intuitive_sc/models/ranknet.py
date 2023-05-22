@@ -95,6 +95,7 @@ class RankNet(nn.Module):
         encoder: Optional[nn.Module] = None,
         fp: bool = False,
         use_geom: bool = False,
+        arrange: str = "GGLGGL",
     ) -> None:
         """Basic RankNet implementation. Pairs of samples are classified
         according to sigmoid(s_i - s_j) where s_i, s_j are scores learned
@@ -110,6 +111,8 @@ class RankNet(nn.Module):
             fp (bool, optional): Whether to use a fingerprint encoder. \
                 Defaults to False.
             use_geom (bool, optional): Whether to use geometric mean. Defaults to False.
+            arrange (str, optional): Arrangement of GAT and EvoLine layers.\
+                Defaults to 'GGLGGL'.
         """
         super(RankNet, self).__init__()
         self.fp = fp
@@ -129,6 +132,7 @@ class RankNet(nn.Module):
                     dropout=dropout_p,
                     num_heads=8,  # TODO hard-coded: att heads got GATv2 layers
                     use_geom=use_geom,
+                    arrange=arrange,
                 )
             )
 
@@ -155,7 +159,6 @@ class RankNet(nn.Module):
             return self.encoder(x)
 
 
-# TODO will have to add Union for different input types (graphs and FP)
 class LitRankNet(pl.LightningModule):
     def __init__(
         self,
@@ -170,6 +173,7 @@ class LitRankNet(pl.LightningModule):
         encoder: Optional[nn.Module] = None,
         fp: bool = False,
         use_geom: bool = False,
+        arrange: str = "GGLGGL",
     ) -> None:
         """Main RankNet Lightning module
 
@@ -193,10 +197,18 @@ class LitRankNet(pl.LightningModule):
             fp (bool, optional): Whether to use a fingerprint encoder.\
                 Defaults to False.
             use_geom (bool, optional): Whether to use geometric mean. Defaults to False.
+            arrange (str, optional): Arrangement of GAT and EvoLine layers.\
+                Defaults to 'GGLGGL'.
         """
         super().__init__()
         self.net = (
-            RankNet(input_size=input_size, encoder=encoder, fp=fp, use_geom=use_geom)
+            RankNet(
+                input_size=input_size,
+                encoder=encoder,
+                fp=fp,
+                use_geom=use_geom,
+                arrange=arrange,
+            )
             if net is None
             else net
         )

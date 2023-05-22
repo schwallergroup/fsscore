@@ -15,7 +15,7 @@ from scipy.sparse import coo_matrix
 from intuitive_sc.utils.conversions import one_hot_encoding
 
 # TODO adapt
-ATOM_TYPES = ["H", "B", "C", "N", "O", "F", "Si", "P", "S", "Cl", "Br", "I"]
+ATOM_TYPES = ["H", "B", "C", "N", "O", "F", "Si", "P", "S", "Cl", "Br", "I", "Se"]
 CHARGES = list(range(-4, 5))
 DEGREES = list(range(5))
 HYBRIDIZATIONS = list(range(len(Chem.HybridizationType.names) - 1))

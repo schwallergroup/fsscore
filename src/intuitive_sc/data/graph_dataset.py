@@ -10,6 +10,7 @@ from typing import List, Union
 # from torch_sparse import SparseTensor
 import networkx as nx
 import numpy as np
+import pandas as pd
 import torch
 from rdkit import Chem
 from torch.utils.data import Dataset
@@ -52,12 +53,14 @@ class GraphDataset(Dataset):
         smiles: List[str] = None,
         ids: List[str] = None,
         use_geom: bool = False,  # TODO add option to use confs instead of smiles
+        depth: int = 1,
     ):
         self.data_list = []
         self.smiles = smiles
         self.processed_path = processed_path
         self.mols = [Chem.MolFromSmiles(smi) for smi in smiles]
         self.use_geom = use_geom
+        self.depth = depth
         if ids is None:
             self.ids = self.smiles
         else:
@@ -70,6 +73,7 @@ class GraphDataset(Dataset):
         else:
             # TODO maybe add option to reload data (in case there is a new featurizer)
             self.data_list = torch.load(self.processed_path)
+        self.transform()
 
     def _process(self):
         for i, mol in enumerate(tqdm(self.mols, desc="graph data processing")):
@@ -103,7 +107,11 @@ class GraphDataset(Dataset):
 
         torch.save(self.data_list, self.processed_path)
 
-    def transform(self, depth):
+    def load_data(self):
+        self.data_list = torch.load(self.processed_path)
+        self.transform()
+
+    def transform(self):
         for data in self.data_list:
             edges = torch.LongTensor(
                 np.array(nx.from_edgelist(data.edge_index.T.tolist()).edges)
@@ -119,7 +127,7 @@ class GraphDataset(Dataset):
 
             setattr(data, f"edges_{0}", edges)
 
-            for i in range(depth):
+            for i in range(self.depth):
                 num_nodes = edges.shape[0]
                 edges = evolve_edges_generater(edges)
 
@@ -170,10 +178,11 @@ def evolve_edges_generater(edges):
     return torch.LongTensor(list(chain(*output))).to(edges.device)
 
 
-# class TargetSelectTransform(object):
-#     def __init__(self, target_id=0):
-#         self.target_id = target_id
-
-#     def __call__(self, data):
-#         data.y = data.y[:, self.target_id]
-#         return data
+if __name__ == "__main__":
+    # use this to generate and save the processed data (e.g. for holdout set)
+    df = pd.read_csv("path/to/smiles.csv")
+    smiles = df["smiles"].tolist()
+    graphset = GraphDataset(
+        smiles=smiles, processed_path="path/to/save.pt", use_geom=False
+    )
+    graphset.transform(1)

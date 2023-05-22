@@ -9,7 +9,7 @@ import rdkit
 import torch
 from rdkit import Chem
 from torch.utils.data import DataLoader, Dataset
-from torch_geometric.data import DataLoader as GraphDataLoader
+from torch_geometric.loader import DataLoader as GraphDataLoader
 
 from intuitive_sc.data.featurizer import (
     Featurizer,

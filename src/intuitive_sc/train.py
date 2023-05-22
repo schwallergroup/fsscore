@@ -6,16 +6,13 @@ import pandas as pd
 import pytorch_lightning as pl
 import torch.nn.functional as F
 from rdkit import Chem
-from sklearn.model_selection import train_test_split
 
-from intuitive_sc.data.dataloader import get_dataloader
+from intuitive_sc.data.datamodule import CustomDataModule
 from intuitive_sc.data.featurizer import (
     AVAILABLE_FEATURIZERS,
     AVAILABLE_FP_FEATURIZERS,
     AVAILABLE_GRAPH_FEATURIZERS,
-    get_featurizer,
 )
-from intuitive_sc.data.graph_dataset import GraphDataset
 from intuitive_sc.models.gnn import AVAILABLE_GRAPH_ENCODERS
 from intuitive_sc.models.nn_utils import get_new_model_and_trainer
 from intuitive_sc.utils.logging import get_logger
@@ -25,7 +22,7 @@ LOGGER = get_logger(__name__)
 
 
 # TODO add option to have different loss (so could also have hinge loss)
-# TODO should have option for fixed train/validation/test split
+# TODO should have option for fixed train/validation/test split (make in datamodule)
 def train(
     smiles: List[Tuple[str, str]],
     target: List[float],
@@ -46,6 +43,8 @@ def train(
     dropout_p: float = 0.0,
     loss_fn: Callable = F.binary_cross_entropy_with_logits,
     resume_training: bool = False,
+    arrange_layers: str = "GGLGGL",
+    use_geom: bool = False,  # TODO hard-coded - build option to use 3D graphs
 ) -> None:
     """
     Trains a model to rank molecules.
@@ -70,64 +69,26 @@ def train(
         dropout_p: Dropout probability
         loss_fn: Loss function
     """
-    use_geom = False  # TODO build option to use 3D graphs
-    if not use_fp:
-        # create graph dataset so not have to compute graph features every time
-        LOGGER.info("Getting graph dataset.")
-        smiles_all = [s for pair in smiles for s in pair]
-        smiles_all = list(set(smiles_all))
-        graph_dataset = GraphDataset(
-            smiles=smiles_all,
-            processed_path=graph_datapath,
-            # ids=None, TODO rn ids are smiles
-            use_geom=use_geom,
-        )
-        graph_dataset.transform(depth=1)  # TODO args for this (n layers of readout)
-        featurizer = get_featurizer(args.featurizer, graph_dataset=graph_dataset)
-    else:
-        graph_dataset = None
-        featurizer = get_featurizer(args.featurizer, nbits=2048)
-
-    # get dataloaders
-    if val_size > 0:
-        smiles_train, smiles_val, target_train, target_val = train_test_split(
-            smiles, target, test_size=val_size, random_state=seed
-        )
-        dataloader_train = get_dataloader(
-            smiles_train,
-            target_train,
-            batch_size=batch_size,
-            featurizer=featurizer,
-            num_workers=num_workers,
-            read_fn=read_fn,
-            graphset=True if graph_dataset is not None else False,
-        )
-        dataloader_val = get_dataloader(
-            smiles_val,
-            target_val,
-            batch_size=batch_size,
-            featurizer=featurizer,
-            num_workers=num_workers,
-            read_fn=read_fn,
-            graphset=True if graph_dataset is not None else False,
-        )
-    else:
-        dataloader_train = get_dataloader(
-            smiles,
-            target,
-            batch_size=batch_size,
-            featurizer=featurizer,
-            num_workers=num_workers,
-            read_fn=read_fn,
-            graphset=True if graph_dataset is not None else False,
-        )
-        dataloader_val = None
-        LOGGER.info("No validation set. Trains on full dataset (for production).")
+    dm = CustomDataModule(
+        smiles=smiles,
+        target=target,
+        featurizer=args.featurizer,
+        graph_datapath=graph_datapath,
+        use_fp=use_fp,
+        val_size=val_size,
+        seed=seed,
+        batch_size=batch_size,
+        num_workers=num_workers,
+        read_fn=read_fn,
+        use_geom=use_geom,
+        random_split=True,  # TODO hard-coded
+        depth_edges=1,  # TODO hard-coded
+    )
 
     # get model and trainer
     model, trainer = get_new_model_and_trainer(
         save_dir=save_dir,
-        input_size=dataloader_train.dataset.featurizer.dim(),
+        input_size=dm.featurizer.dim(),
         lr=lr,
         reg_factor=regularization_factor,
         n_epochs=n_epochs,
@@ -138,6 +99,7 @@ def train(
         encoder=graph_encoder,
         use_fp=use_fp,
         use_geom=use_geom,
+        arrange=arrange_layers,
     )
 
     # access last checkpoint
@@ -150,8 +112,7 @@ def train(
     # train model
     trainer.fit(
         model,
-        dataloader_train,
-        dataloader_val,
+        dm,
         ckpt_path=model_ckpt,
     )
 
@@ -285,6 +246,12 @@ if __name__ == "__main__":
         action="store_true",
         help="Whether to resume training from last checkpoint",
     )
+    parser.add_argument(
+        "--arrange_layers",
+        type=str,
+        help="Define arrangement of GNN layers, e.g. GGLGGL. G = GATv2, L = LineEvo.",
+        default="GGLGGL",
+    )
 
     args = parser.parse_args()
 
@@ -331,4 +298,5 @@ if __name__ == "__main__":
         # TODO import class for hinge loss
         loss_fn="hinge" if args.hinge_loss else F.binary_cross_entropy_with_logits,
         resume_training=args.resume_training,
+        arrange_layers=args.arrange_layers,
     )

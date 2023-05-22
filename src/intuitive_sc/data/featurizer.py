@@ -131,7 +131,6 @@ class Graph2DFeaturizer(GraphFeaturizer):
             graph_container = MolGraph()
             return graph_container(mol)
 
-    # TODO check if this is the correct dim that we need for the model
     def dim(self) -> int:
         """Size of the returned feature"""
         return self.graph_dataset.node_dim

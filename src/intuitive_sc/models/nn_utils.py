@@ -21,6 +21,7 @@ def get_new_model_and_trainer(
     encoder: Optional[str] = None,
     use_fp: bool = False,
     use_geom: bool = False,
+    arrange: str = "GGLGGL",
 ) -> Tuple[LitRankNet, pl.Trainer]:
     """
     Creates a new RankNet model and trainer.
@@ -38,6 +39,7 @@ def get_new_model_and_trainer(
         encoder: Encoder to use
         use_fp: Whether to use fingerprints
         use_geom: Whether to use geometry
+        arrange: Arrangement of layers
 
     Returns:
         Tuple of model and trainer
@@ -66,6 +68,7 @@ def get_new_model_and_trainer(
         encoder=encoder,
         fp=use_fp,
         use_geom=use_geom,
+        arrange=arrange,
     )
     model = LitRankNet(
         net=net,
@@ -78,6 +81,7 @@ def get_new_model_and_trainer(
         encoder=encoder,
         fp=use_fp,
         use_geom=use_geom,
+        arrange=arrange,
     )
     trainer = pl.Trainer(
         logger=logger,

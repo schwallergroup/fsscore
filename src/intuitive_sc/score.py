@@ -8,12 +8,13 @@ import torch
 from pytorch_lightning import Trainer
 from rdkit import Chem
 
-from intuitive_sc.data.dataloader import get_dataloader
+from intuitive_sc.data.datamodule import CustomDataModule
 from intuitive_sc.data.featurizer import (
     AVAILABLE_FEATURIZERS,
     Featurizer,
     get_featurizer,
 )
+from intuitive_sc.models.gnn import AVAILABLE_GRAPH_ENCODERS
 from intuitive_sc.models.ranknet import LitRankNet
 from intuitive_sc.utils.logging import get_logger
 
@@ -57,14 +58,15 @@ class Scorer:
         Returns:
             np.ndarray of scores
         """
-        dataloader = get_dataloader(
-            molrpr=smiles,
+        dm = CustomDataModule(
+            smiles=smiles,
             featurizer=self.featurizer,
             batch_size=batch_size,
             num_workers=self.num_workers,
             read_fn=read_fn,
         )
-        preds = self.trainer.predict(self.model, dataloader)
+
+        preds = self.trainer.predict(self.model, dm)
 
         if self.model.mc_dropout_samples > 1:
             scores_mean, scores_var = [pred[0] for pred in preds], [
@@ -113,7 +115,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--graph_encoder",
-        choices=["GCN", "GAT", "GIN"],  # TODO add actual list here from models
+        choices=list(AVAILABLE_GRAPH_ENCODERS.keys()),
         help="Name of the graph encoder to use",
         default="GCN",
     )
