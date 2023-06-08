@@ -44,6 +44,7 @@ def train(
     loss_fn: Callable = F.binary_cross_entropy_with_logits,
     resume_training: bool = False,
     arrange_layers: str = "GGLGGL",
+    val_indices: Optional[List[int]] = None,
     use_geom: bool = False,  # TODO hard-coded - build option to use 3D graphs
 ) -> None:
     """
@@ -81,7 +82,8 @@ def train(
         num_workers=num_workers,
         read_fn=read_fn,
         use_geom=use_geom,
-        random_split=True,  # TODO hard-coded
+        random_split=True if val_indices is None else False,
+        val_indices=val_indices,
         depth_edges=1,  # TODO hard-coded
     )
 
@@ -252,6 +254,11 @@ if __name__ == "__main__":
         help="Define arrangement of GNN layers, e.g. GGLGGL. G = GATv2, L = LineEvo.",
         default="GGLGGL",
     )
+    parser.add_argument(
+        "--fixed_split",
+        action="store_true",
+        help="Whether to use a fixed train/val split",
+    )
 
     args = parser.parse_args()
 
@@ -273,6 +280,8 @@ if __name__ == "__main__":
         df = df.sample(args.subsample)
     smiles_pairs = df[args.compound_cols].values.tolist()  # TODO check this works
     target = df[args.rating_col].values.tolist()
+    if args.fixed_split:
+        val_indices = df[df["split"] == "val"].index.tolist()
 
     if not os.path.exists(args.graph_datapath) and not args.use_fp:
         data_name = os.path.basename(args.data_path).split(".")[0]
@@ -299,4 +308,5 @@ if __name__ == "__main__":
         loss_fn="hinge" if args.hinge_loss else F.binary_cross_entropy_with_logits,
         resume_training=args.resume_training,
         arrange_layers=args.arrange_layers,
+        val_indices=val_indices if args.fixed_split else None,
     )

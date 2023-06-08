@@ -29,6 +29,7 @@ class CustomDataModule(pl.LightningDataModule):
         use_geom: bool = False,
         graph_datapath: str = None,
         random_split: bool = True,
+        val_indices: List[int] = None,
         seed: int = 42,
         num_workers: int = None,
         depth_edges: int = 1,
@@ -44,6 +45,7 @@ class CustomDataModule(pl.LightningDataModule):
         self.use_geom = use_geom
         self.graph_datapath = graph_datapath
         self.random_split = random_split
+        self.val_indices = val_indices
         self.seed = seed
         self.num_workers = num_workers
         self.depth_edges = depth_edges
@@ -92,7 +94,12 @@ class CustomDataModule(pl.LightningDataModule):
                 random_state=self.seed,
             )
         if stage == "fit" and not self.random_split:
-            pass  # TODO save fixed train and val sets
+            if not self.use_fp:
+                self.graph_dataset.load_data()
+            self.smiles_train = [self.smiles[i] for i in self.val_indices]
+            self.smiles_val = [self.smiles[i] for i in self.val_indices]
+            self.target_train = [self.target[i] for i in self.val_indices]
+            self.target_val = [self.target[i] for i in self.val_indices]
 
         if stage == "test":
             pass  # TODO create holdout set
