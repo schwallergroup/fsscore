@@ -57,5 +57,7 @@ MANIFEST
 playground.ipynb
 scscore/models/example_model
 data/raw_uspto
+data/raw
+data/combo
 models
 lightning_logs
