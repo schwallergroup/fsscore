@@ -220,7 +220,7 @@ class LitRankNet(pl.LightningModule):
         self.mc_dropout_samples = mc_dropout_samples
         self.fp = fp
 
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore="net")
 
     @staticmethod
     def get_reg_loss(

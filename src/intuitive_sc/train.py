@@ -1,9 +1,11 @@
 import argparse
 import os
+from datetime import date
 from typing import Callable, List, Optional, Tuple
 
 import pandas as pd
 import pytorch_lightning as pl
+import torch
 import torch.nn.functional as F
 from rdkit import Chem
 
@@ -153,7 +155,7 @@ if __name__ == "__main__":
         "--save_dir",
         type=str,
         help="Directory to save the model and results",
-        default=os.path.join(MODEL_PATH, "new_experiment"),
+        default=os.path.join(MODEL_PATH, f"new_experiment_{date.today()}"),
     )
     parser.add_argument(
         "--featurizer",
@@ -274,6 +276,7 @@ if __name__ == "__main__":
     os.makedirs(MODEL_PATH, exist_ok=True)
 
     pl.seed_everything(args.seed, workers=True)
+    torch.set_float32_matmul_precision("medium")
 
     df = pd.read_csv(args.data_path)
     if args.subsample is not None:
@@ -285,7 +288,12 @@ if __name__ == "__main__":
 
     if not os.path.exists(args.graph_datapath) and not args.use_fp:
         data_name = os.path.basename(args.data_path).split(".")[0]
-        args.graph_datapath = os.path.join(DATA_PATH, f"{data_name}_graphs.pt")
+        if args.subsample is not None:
+            args.graph_datapath = os.path.join(
+                DATA_PATH, f"{data_name}_sub{args.subsample}_seed{args.seed}_graphs.pt"
+            )
+        else:
+            args.graph_datapath = os.path.join(DATA_PATH, f"{data_name}_graphs.pt")
 
     train(
         smiles=smiles_pairs,
