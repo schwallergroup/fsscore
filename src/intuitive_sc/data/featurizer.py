@@ -174,7 +174,13 @@ def get_featurizer(featurizer_name: str, **kwargs) -> Featurizer:
     return AVAILABLE_FEATURIZERS[featurizer_name](**kwargs)
 
 
-AVAILABLE_FEATURIZERS = AVAILABLE_FP_FEATURIZERS | AVAILABLE_GRAPH_FEATURIZERS
+try:
+    AVAILABLE_FEATURIZERS = AVAILABLE_FP_FEATURIZERS | AVAILABLE_GRAPH_FEATURIZERS
+except TypeError:
+    # before python 3.9
+    AVAILABLE_FEATURIZERS = dict(
+        AVAILABLE_FP_FEATURIZERS, **AVAILABLE_GRAPH_FEATURIZERS
+    )
 
 if __name__ == "__main__":
     print(AVAILABLE_FEATURIZERS)
