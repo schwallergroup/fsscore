@@ -2,8 +2,10 @@
 Create a graph dataset class that inherits from torch_geometric.data.Dataset.
 Code adapted from LineEvo (https://github.com/fate1997/LineEvo/tree/main)
 """
+import concurrent.futures
 import os
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from itertools import chain, combinations
 from typing import List, Union
 
@@ -18,6 +20,9 @@ from torch_geometric.data import Data
 from tqdm import tqdm
 
 from intuitive_sc.data.molgraph import MolGraph
+from intuitive_sc.utils.logging import get_logger
+
+LOGGER = get_logger(__name__)
 
 
 class GraphData(Data):
@@ -58,7 +63,6 @@ class GraphDataset(Dataset):
         self.data_list = []
         self.smiles = smiles
         self.processed_path = processed_path
-        self.mols = [Chem.MolFromSmiles(smi) for smi in smiles]
         self.use_geom = use_geom
         self.depth = depth
         if ids is None:
@@ -69,14 +73,73 @@ class GraphDataset(Dataset):
         self.name = os.path.basename(processed_path).split(".")[0]
 
         if not os.path.exists(self.processed_path):
-            self._process()
+            self._process_loop()
         else:
             # TODO maybe add option to reload data (in case there is a new featurizer)
             self.data_list = torch.load(self.processed_path)
         self.transform()
 
-    def _process(self):
-        for i, mol in enumerate(tqdm(self.mols, desc="graph data processing")):
+    def process_mol(self, smiles: str):
+        mol = Chem.MolFromSmiles(smiles)
+        feature_dict = self.featurizer(mol)
+        data = GraphData(ID=smiles)
+
+        # Positions
+        if "pos" not in feature_dict.keys() and self.use_geom:
+            print("Warning: No positions found for {}".format(smiles))
+        if self.use_geom:
+            data.pos = torch.tensor(feature_dict["pos"], dtype=torch.float32)
+
+        # Edge index and edges
+        data.edge_index = feature_dict["edge_index"]
+
+        # Edge_attr
+        if "edge_attr" in feature_dict.keys():
+            data.edge_attr = feature_dict["edge_attr"].clone().detach()
+            data.num_bonds_features = (
+                data.edge_attr.shape[1] if data.edge_attr.shape[0] != 0 else 0
+            )
+
+        data.x = feature_dict["x"].clone().detach()
+
+        # Representation info
+        data.num_bonds = data.edge_index.shape[1]
+        data.num_nodes_features = data.x.shape[1]
+        data.num_nodes = data.x.shape[0]
+
+        return data
+
+    def process_batch(self, batch):
+        return [self.process_mol(smi) for smi in batch]
+
+    def _process_pooled(self):
+        # FIXME does not work
+        with ThreadPoolExecutor() as executor:
+            batch_size = 100  # Adjust the batch size as per your memory requirements
+            num_batches = len(self.smiles) // batch_size
+            remaining = len(self.smiles) % batch_size
+            results = []
+
+            for i in range(num_batches):
+                batch = self.smiles[i * batch_size : (i + 1) * batch_size]
+                results.append(executor.submit(self.process_batch, batch))
+
+            if remaining > 0:
+                batch = self.smiles[num_batches * batch_size :]
+                results.append(executor.submit(self.process_batch, batch))
+
+            for future in tqdm(
+                concurrent.futures.as_completed(results),
+                total=len(results),
+                desc="Graph data processing",
+            ):
+                self.data_list.extend(future.result())
+
+        torch.save(self.data_list, self.processed_path)
+
+    def _process_loop(self):
+        for i, smi in enumerate(tqdm(self.smiles, desc="graph data processing")):
+            mol = Chem.MolFromSmiles(smi)
             feature_dict = self.featurizer(mol)
             data = GraphData(ID=self.ids[i])
 
