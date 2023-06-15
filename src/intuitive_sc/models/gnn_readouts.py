@@ -90,7 +90,7 @@ class LineEvoLayer(nn.Module):
         edges = torch.cat(
             [
                 edges,
-                torch.LongTensor([[i, i] for i in isolated_nodes], device=edges.device),
+                torch.LongTensor([[i, i] for i in isolated_nodes]).to(edges.device),
             ],
             dim=0,
         ).to(torch.long)

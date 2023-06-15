@@ -92,7 +92,7 @@ def get_new_model_and_trainer(
         log_every_n_steps=log_every,
         callbacks=[ckpt],
         deterministic=False,  # some components cannot be deterministic
-        profile=True,
+        profiler="simple",
     )
 
     return model, trainer
