@@ -96,7 +96,7 @@ class MorganFingerprint(FingerprintFeaturizer):
             else AllChem.GetMorganFingerprintAsBitVect
         )
         fp = fp_fun(mol, self.bond_radius, self.nbits)
-        arr = np.zeros((1,), dtype=np.float32)
+        arr = np.zeros((1,), dtype=np.float16)
         DataStructs.ConvertToNumpyArray(fp, arr)
         return arr
 

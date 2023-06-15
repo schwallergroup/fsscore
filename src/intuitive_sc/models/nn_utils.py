@@ -84,6 +84,7 @@ def get_new_model_and_trainer(
         arrange=arrange,
     )
     trainer = pl.Trainer(
+        precision="16-mixed",
         logger=logger,
         accelerator="auto",
         devices=1,
@@ -91,6 +92,7 @@ def get_new_model_and_trainer(
         log_every_n_steps=log_every,
         callbacks=[ckpt],
         deterministic=False,  # some components cannot be deterministic
+        profile=True,
     )
 
     return model, trainer

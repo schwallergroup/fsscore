@@ -73,7 +73,11 @@ def get_dataloader(
 
     if graphset:
         return GraphDataLoader(
-            data, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers
+            data,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            num_workers=num_workers,
+            pin_memory=True,
         )
     else:
         return DataLoader(
@@ -81,6 +85,7 @@ def get_dataloader(
             batch_size=batch_size,
             shuffle=shuffle,
             num_workers=num_workers,
+            pin_memory=True,
         )
 
 

@@ -30,8 +30,8 @@ class LineEvo(nn.Module):
         self, x: torch.Tensor, edge_index, edge_attr, pos, batch: torch.Tensor
     ) -> torch.Tensor:
         edges = torch.as_tensor(
-            np.array(nx.from_edgelist(edge_index.T.tolist()).edges)
-        ).to(x.device)
+            np.array(nx.from_edgelist(edge_index.T.tolist()).edges), device=x.device
+        )
 
         mol_repr_all = 0
         for layer in self.layers:
@@ -90,7 +90,7 @@ class LineEvoLayer(nn.Module):
         edges = torch.cat(
             [
                 edges,
-                torch.LongTensor([[i, i] for i in isolated_nodes]).to(edges.device),
+                torch.LongTensor([[i, i] for i in isolated_nodes], device=edges.device),
             ],
             dim=0,
         ).to(torch.long)
@@ -136,7 +136,7 @@ class LineEvoLayer(nn.Module):
             if len(locs) > 1:
                 output.append(list(combinations(locs, 2)))
 
-        return torch.tensor(list(chain(*output))).to(edges.device)
+        return torch.tensor(list(chain(*output)), device=edges.device)
 
 
 class GATv2Layer(nn.Module):

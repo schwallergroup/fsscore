@@ -88,7 +88,7 @@ class GraphDataset(Dataset):
         if "pos" not in feature_dict.keys() and self.use_geom:
             print("Warning: No positions found for {}".format(smiles))
         if self.use_geom:
-            data.pos = torch.tensor(feature_dict["pos"], dtype=torch.float32)
+            data.pos = torch.tensor(feature_dict["pos"], dtype=torch.float16)
 
         # Edge index and edges
         data.edge_index = feature_dict["edge_index"]
@@ -147,7 +147,7 @@ class GraphDataset(Dataset):
             if "pos" not in feature_dict.keys() and self.use_geom:
                 print("Warning: No positions found for molecule {}".format(self.ids[i]))
             if self.use_geom:
-                data.pos = torch.tensor(feature_dict["pos"], dtype=torch.float32)
+                data.pos = torch.tensor(feature_dict["pos"], dtype=torch.float16)
 
             # edge index and edges
             data.edge_index = feature_dict["edge_index"]
@@ -201,8 +201,8 @@ class GraphDataset(Dataset):
                 edges = torch.cat(
                     [
                         edges,
-                        torch.LongTensor([[i, i] for i in isolated_nodes]).to(
-                            edges.device
+                        torch.LongTensor(
+                            [[i, i] for i in isolated_nodes], device=edges.device
                         ),
                     ],
                     dim=0,
@@ -238,7 +238,7 @@ def evolve_edges_generater(edges):
         if len(locs) > 1:
             output.append(list(combinations(locs, 2)))
 
-    return torch.LongTensor(list(chain(*output))).to(edges.device)
+    return torch.LongTensor(list(chain(*output)), device=edges.device)
 
 
 if __name__ == "__main__":

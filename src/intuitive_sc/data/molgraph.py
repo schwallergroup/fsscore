@@ -60,7 +60,7 @@ class MolGraph(abc.ABC):
         atoms = map(self.mol.GetAtomWithIdx, range(self.n_atoms))
         self.node_features = torch.tensor(
             np.array([self._atom_featurizer(atom) for atom in atoms]),
-            dtype=torch.float32,
+            dtype=torch.float16,
         )
 
     def _get_edge_features(self):
@@ -85,7 +85,7 @@ class MolGraph(abc.ABC):
                 bond_features.append(self._bond_featurizer(bond))
         else:
             bond_features = []
-        self.edge_features = torch.tensor(np.array(bond_features), dtype=torch.float32)
+        self.edge_features = torch.tensor(np.array(bond_features), dtype=torch.float16)
 
     def _atom_featurizer(self, atom: rdkit.Chem.rdchem.Atom):
         """Create node feature vector for a given atom of the graph.
