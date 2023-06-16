@@ -61,3 +61,4 @@ data/raw_uspto
 data/*.pt
 models/*
 lightning_logs
+data/raw

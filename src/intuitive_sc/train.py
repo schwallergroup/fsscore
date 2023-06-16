@@ -137,7 +137,7 @@ if __name__ == "__main__":
         "--graph_datapath",
         type=str,
         help="Path to the pt file with featurized graphs and SMILES as ID.",
-        default="",
+        default=None,
     )
     parser.add_argument(
         "--compound_cols",
@@ -286,7 +286,7 @@ if __name__ == "__main__":
     if args.fixed_split:
         val_indices = df[df["split"] == "val"].index.tolist()
 
-    if not os.path.exists(args.graph_datapath) and not args.use_fp:
+    if args.graph_datapath is None and not args.use_fp:
         data_name = os.path.basename(args.data_path).split(".")[0]
         if args.subsample is not None:
             args.graph_datapath = os.path.join(
