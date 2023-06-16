@@ -19,7 +19,7 @@ from torch.utils.data import Dataset
 from torch_geometric.data import Data
 from tqdm import tqdm
 
-from intuitive_sc.data.molgraph import MolGraph
+from intuitive_sc.data.molgraph import NUM_NODE_FEATURES, MolGraph
 from intuitive_sc.utils.logging import get_logger
 
 LOGGER = get_logger(__name__)
@@ -74,10 +74,12 @@ class GraphDataset(Dataset):
 
         if not os.path.exists(self.processed_path):
             self._process_loop()
-        else:
-            # TODO maybe add option to reload data (in case there is a new featurizer)
-            self.data_list = torch.load(self.processed_path)
-        self.transform()
+        # TODO not needed except to get dims used at training (now a lil hacky)
+        # actual values are loaded with dm in the dataloader
+        # else:
+        #     # TODO add option to reload data (in case there is a new featurizer)
+        #     self.data_list = torch.load(self.processed_path)
+        # self.transform()
 
     def process_mol(self, smiles: str):
         mol = Chem.MolFromSmiles(smiles)
@@ -224,7 +226,10 @@ class GraphDataset(Dataset):
 
     @property
     def node_dim(self) -> int:
-        return self.data_list[0].num_nodes_features
+        if self.data_list:
+            return self.data_list[0].num_nodes_features
+        else:
+            return NUM_NODE_FEATURES
 
 
 def evolve_edges_generater(edges):

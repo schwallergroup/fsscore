@@ -26,6 +26,18 @@ BOND_TYPES = [
     Chem.rdchem.BondType.TRIPLE,
     Chem.rdchem.BondType.AROMATIC,
 ]
+NUM_NODE_FEATURES = (
+    len(ATOM_TYPES)
+    + 1
+    + len(CHARGES)
+    + 1
+    + 2 * (len(DEGREES) + 1)
+    + len(HYBRIDIZATIONS)
+    + 1
+    + len(CHIRAL_TAGS)
+    + 1
+    + 2
+)
 
 
 class MolGraph(abc.ABC):

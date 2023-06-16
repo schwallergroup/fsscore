@@ -5,7 +5,6 @@ import warnings
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
-import rdkit
 import torch
 from rdkit import Chem
 from torch.utils.data import DataLoader, Dataset
@@ -124,7 +123,7 @@ class BaseDataset(Dataset, abc.ABC):
     def __len__(self):
         return len(self.molrpr)
 
-    def get_desc(self, mol: rdkit.Chem.rdchem.Mol):
+    def get_desc(self, smi: str):
         raise NotImplementedError()
 
 
@@ -157,18 +156,16 @@ class PairDataset(BaseDataset):
     ]:
         molrpr_index = self.molrpr[index]
         smi_i, smi_j = molrpr_index[0], molrpr_index[1]
-        mol_i, mol_j = self.read_fn(smi_i), self.read_fn(smi_j)
-        desc_i, desc_j = self.get_desc(mol_i, smi_i), self.get_desc(mol_j, smi_j)
+        desc_i, desc_j = self.get_desc(smi_i), self.get_desc(smi_j)
         if self.target is not None:
             target = torch.FloatTensor([self.target[index]])
             return (desc_i, desc_j), target
         else:
             return (desc_i, desc_j)
 
-    def get_desc(
-        self, mol: rdkit.Chem.rdchem.Mol, smiles: str
-    ) -> Union[torch.Tensor, GraphData]:
+    def get_desc(self, smiles: str) -> Union[torch.Tensor, GraphData]:
         if isinstance(self.featurizer, FingerprintFeaturizer):
+            mol = self.read_fn(smiles)
             return torch.from_numpy(self.featurizer.get_feat(mol))
         elif isinstance(self.featurizer, GraphFeaturizer):
             return self.featurizer.get_feat(smiles=smiles)
@@ -202,8 +199,7 @@ class SingleDataset(PairDataset):
         Tuple[Dict, torch.Tensor],
     ]:
         molrpr_index = self.molrpr[index]
-        mol = self.read_fn(molrpr_index)
-        desc = self.get_desc(mol, molrpr_index)
+        desc = self.get_desc(molrpr_index)
         if self.target is not None:
             target = torch.FloatTensor([self.target[index]])
             return desc, target
