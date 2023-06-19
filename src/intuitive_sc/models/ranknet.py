@@ -262,7 +262,9 @@ class LitRankNet(pl.LightningModule):
         metrics = compute_metrics(logit, target, loss, target_prob=self.target_prob)
         for metric_k, metric_val in metrics.items():
             self.log(f"train/{metric_k}", metric_val)
-        self.log("train/regloss", reg_loss.item(), batch_size=score_i.size(0))
+        self.log(
+            "train/regloss", reg_loss.item(), batch_size=score_i.size(0), sync_dist=True
+        )
         return loss + reg_loss
 
     def validation_step(
@@ -275,7 +277,9 @@ class LitRankNet(pl.LightningModule):
         metrics = compute_metrics(logit, target, loss, target_prob=self.target_prob)
         for metric_k, metric_val in metrics.items():
             self.log(f"val/{metric_k}", metric_val)
-        self.log("val/regloss", reg_loss.item(), batch_size=score_i.size(0))
+        self.log(
+            "val/regloss", reg_loss.item(), batch_size=score_i.size(0), sync_dist=True
+        )
         return loss + reg_loss
 
     def test_step(
@@ -288,7 +292,9 @@ class LitRankNet(pl.LightningModule):
         metrics = compute_metrics(logit, target, target_prob=self.target_prob)
         for metric_k, metric_val in metrics.items():
             self.log(f"test/{metric_k}", metric_val)
-        self.log("test/regloss", reg_loss.item(), batch_size=score_i.size(0))
+        self.log(
+            "test/regloss", reg_loss.item(), batch_size=score_i.size(0), sync_dist=True
+        )
         return {metric_k: metric_val for metric_k, metric_val in metrics.items()}
 
     def predict_step(

@@ -2,6 +2,7 @@ import os
 from typing import Callable, Optional, Tuple
 
 import pytorch_lightning as pl
+import torch
 import torch.nn.functional as F
 from pytorch_lightning.loggers import WandbLogger
 
@@ -87,12 +88,14 @@ def get_new_model_and_trainer(
         precision="16-mixed",
         logger=logger,
         accelerator="auto",
-        devices=1,
+        devices=torch.cuda.device_count(),
+        strategy="ddp",
         max_epochs=n_epochs,
         log_every_n_steps=log_every,
         callbacks=[ckpt],
         deterministic=False,  # some components cannot be deterministic
         profiler="simple",
+        val_check_interval=0.25,
     )
 
     return model, trainer
