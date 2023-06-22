@@ -79,6 +79,11 @@ class CustomDataModule(pl.LightningDataModule):
             self.featurizer = get_featurizer(self.featurizer, nbits=2048)
 
     def setup(self, stage: str) -> None:
+        """
+        Split data into train, val, test, predict sets.
+        This process is run on all workers and is called before training.
+        Beware of memory issues when using multiple workers.
+        """
         if stage == "fit" and self.random_split:
             if not self.use_fp:
                 self.graph_dataset.load_data()

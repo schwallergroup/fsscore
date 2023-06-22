@@ -86,7 +86,7 @@ class GNN(nn.Module):
                 x, mol_repr = self.layers[i](x, edge_index, batch)
             elif ind == "L":
                 edges = getattr(graph, f"edges_{line_index}")
-                x, edges, pos, batch, mol_repr = self.layers[i](x, edges, pos, batch)
+                x, pos, batch, mol_repr = self.layers[i](x, edges, pos, batch)
                 line_index += 1
                 edge_index = to_undirected(edges.T)
             mol_repr_all += mol_repr

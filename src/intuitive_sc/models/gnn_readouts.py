@@ -1,8 +1,6 @@
 """
 Code adapted from LineEvo: https://github.com/fate1997/LineEvo/tree/main
 """
-from collections import defaultdict
-from itertools import chain, combinations
 from typing import Tuple, Union
 
 import networkx as nx
@@ -84,17 +82,6 @@ class LineEvoLayer(nn.Module):
         pos: Union[None, torch.Tensor],
         batch: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-        # create edges for isolated nodes
-        num_nodes = x.shape[0]
-        isolated_nodes = set(range(num_nodes)).difference(set(edges.flatten().tolist()))
-        edges = torch.cat(
-            [
-                edges,
-                torch.LongTensor([[i, i] for i in isolated_nodes]).to(edges.device),
-            ],
-            dim=0,
-        ).to(torch.long)
-
         # feature evolution
         x = self.dropout(x)
         x_src = self.linear(x).index_select(0, edges[:, 0])
@@ -116,27 +103,13 @@ class LineEvoLayer(nn.Module):
         # test
         atom_repr = nn.ELU()(atom_repr)
 
-        # update batch and edges
+        # update batch
         batch = batch.index_select(0, edges[:, 0])
-        edges = self.edge_evolve(edges.to(x.device))
 
         # final readout
         mol_repr = self.readout(atom_repr, batch)
 
-        return (atom_repr, edges, pos, batch, mol_repr)
-
-    def edge_evolve(self, edges: torch.Tensor) -> torch.Tensor:
-        lin_edge = edges[:, 0].tolist() + edges[:, 1].tolist()
-        tally = defaultdict(list)
-        for i, item in enumerate(lin_edge):
-            tally[item].append(i if i < len(lin_edge) // 2 else i - len(lin_edge) // 2)
-
-        output = []
-        for _, locs in tally.items():
-            if len(locs) > 1:
-                output.append(list(combinations(locs, 2)))
-
-        return torch.tensor(list(chain(*output)), device=edges.device)
+        return (atom_repr, pos, batch, mol_repr)
 
 
 class GATv2Layer(nn.Module):
