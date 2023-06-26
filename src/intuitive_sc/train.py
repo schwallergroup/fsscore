@@ -48,6 +48,7 @@ def train(
     arrange_layers: str = "GGLGGL",
     val_indices: Optional[List[int]] = None,
     use_geom: bool = False,  # TODO hard-coded - build option to use 3D graphs
+    depth_edges: int = 1,
 ) -> None:
     """
     Trains a model to rank molecules.
@@ -86,7 +87,7 @@ def train(
         use_geom=use_geom,
         random_split=True if val_indices is None else False,
         val_indices=val_indices,
-        depth_edges=1,  # TODO hard-coded
+        depth_edges=depth_edges,
     )
 
     # get model and trainer
@@ -261,6 +262,12 @@ if __name__ == "__main__":
         action="store_true",
         help="Whether to use a fixed train/val split",
     )
+    parser.add_argument(
+        "--depth_edges",
+        type=int,
+        help="Number of depth edges for LineEvo",
+        default=1,
+    )
 
     args = parser.parse_args()
 
@@ -280,8 +287,8 @@ if __name__ == "__main__":
 
     df = pd.read_csv(args.data_path)
     if args.subsample is not None:
-        df = df.sample(args.subsample)
-    smiles_pairs = df[args.compound_cols].values.tolist()  # TODO check this works
+        df = df.sample(args.subsample, random_state=args.seed).reset_index(drop=True)
+    smiles_pairs = df[args.compound_cols].values.tolist()
     target = df[args.rating_col].values.tolist()
     if args.fixed_split:
         val_indices = df[df["split"] == "val"].index.tolist()
@@ -290,10 +297,14 @@ if __name__ == "__main__":
         data_name = os.path.basename(args.data_path).split(".")[0]
         if args.subsample is not None:
             args.graph_datapath = os.path.join(
-                DATA_PATH, f"{data_name}_sub{args.subsample}_seed{args.seed}_graphs.pt"
+                DATA_PATH,
+                f"{data_name}_sub{args.subsample}_\
+                    seed{args.seed}_evodepth{args.depth_edges}_graphs.pt",
             )
         else:
-            args.graph_datapath = os.path.join(DATA_PATH, f"{data_name}_graphs.pt")
+            args.graph_datapath = os.path.join(
+                DATA_PATH, f"{data_name}_evodepth{args.depth_edges}_graphs.pt"
+            )
 
     train(
         smiles=smiles_pairs,
@@ -317,4 +328,5 @@ if __name__ == "__main__":
         resume_training=args.resume_training,
         arrange_layers=args.arrange_layers,
         val_indices=val_indices if args.fixed_split else None,
+        depth_edges=args.depth_edges,
     )

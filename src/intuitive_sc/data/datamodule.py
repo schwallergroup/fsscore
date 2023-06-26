@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 
 from intuitive_sc.data.dataloader import get_dataloader
 from intuitive_sc.data.featurizer import get_featurizer
-from intuitive_sc.data.graph_dataset import GraphDataset
+from intuitive_sc.data.graph_dataset import GraphDatasetMem
 from intuitive_sc.utils.logging import get_logger
 
 LOGGER = get_logger(__name__)
@@ -64,7 +64,7 @@ class CustomDataModule(pl.LightningDataModule):
             LOGGER.info("Getting graph dataset.")
             smiles_all = [s for pair in self.smiles for s in pair]
             smiles_all = list(set(smiles_all))
-            self.graph_dataset = GraphDataset(
+            self.graph_dataset = GraphDatasetMem(
                 smiles=smiles_all,
                 processed_path=self.graph_datapath,
                 # ids=None, TODO rn ids are smiles
@@ -85,8 +85,9 @@ class CustomDataModule(pl.LightningDataModule):
         Beware of memory issues when using multiple workers.
         """
         if stage == "fit" and self.random_split:
-            if not self.use_fp:
-                self.graph_dataset.load_data()
+            # XXX uncomment if use pyg.data.Dataset instead of InMemoryDataset
+            # if not self.use_fp:
+            # self.graph_dataset.load_data()
             (
                 self.smiles_train,
                 self.smiles_val,
@@ -99,8 +100,8 @@ class CustomDataModule(pl.LightningDataModule):
                 random_state=self.seed,
             )
         if stage == "fit" and not self.random_split:
-            if not self.use_fp:
-                self.graph_dataset.load_data()
+            # if not self.use_fp:
+            #     self.graph_dataset.load_data()
             self.smiles_train = [self.smiles[i] for i in self.val_indices]
             self.smiles_val = [self.smiles[i] for i in self.val_indices]
             self.target_train = [self.target[i] for i in self.val_indices]
@@ -110,8 +111,8 @@ class CustomDataModule(pl.LightningDataModule):
             pass  # TODO create holdout set
 
         if stage == "predict":
-            if not self.use_fp:
-                self.graph_dataset.load_data()
+            # if not self.use_fp:
+            #     self.graph_dataset.load_data()
             self.smiles_predict = self.smiles
 
     def train_dataloader(self) -> DataLoader:

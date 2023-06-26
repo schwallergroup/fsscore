@@ -9,7 +9,7 @@ import numpy as np
 import rdkit
 from rdkit.Chem import AllChem, DataStructs
 
-from intuitive_sc.data.graph_dataset import GraphData, GraphDataset
+from intuitive_sc.data.graph_dataset import GraphData, GraphDataset, GraphDatasetMem
 from intuitive_sc.data.molgraph import MolGraph
 
 
@@ -104,7 +104,9 @@ class MorganFingerprint(FingerprintFeaturizer):
 # TODO entry point to select specific features
 @register_featurizer(name="graph_2D")
 class Graph2DFeaturizer(GraphFeaturizer):
-    def __init__(self, graph_dataset: GraphDataset = None) -> None:
+    def __init__(
+        self, graph_dataset: Union[GraphDataset, GraphDatasetMem] = None
+    ) -> None:
         """Base class for 2D graph featurizer
         Args:
             graph_dataset (GraphDataset, optional): Loaded graph dataset.
@@ -124,7 +126,7 @@ class Graph2DFeaturizer(GraphFeaturizer):
             smiles (str): SMILES string
         """
         if self.graph_dataset is not None:
-            return self.graph_dataset.get_data(ID=smiles)
+            return self.graph_dataset.get(ID=smiles)
         else:
             if mol is None:
                 mol = rdkit.Chem.MolFromSmiles(smiles)
@@ -138,7 +140,9 @@ class Graph2DFeaturizer(GraphFeaturizer):
 
 @register_featurizer(name="graph_3D")
 class Graph3DFeaturizer(GraphFeaturizer):
-    def __init__(self, graph_dataset: GraphDataset = None) -> None:
+    def __init__(
+        self, graph_dataset: Union[GraphDataset, GraphDatasetMem] = None
+    ) -> None:
         """Base class for 3D graph featurizer
 
         Args:
