@@ -5,7 +5,7 @@ Code adapted from LineEvo (https://github.com/fate1997/LineEvo/tree/main)
 import os
 from collections import defaultdict
 from itertools import chain, combinations
-from typing import List, Tuple, Union
+from typing import List, Union
 
 # from torch_sparse import SparseTensor
 import networkx as nx
@@ -77,7 +77,7 @@ class GraphDatasetMem(InMemoryDataset):
         self.data, self.slices = torch.load(self.processed_path)
 
     @property
-    def processed_file_names(self) -> Union[str, List[str, Tuple]]:
+    def processed_file_names(self) -> Union[str, List[Union[str, int]]]:
         return [self.processed_path]
 
     def process_mol(self, smiles: str):
