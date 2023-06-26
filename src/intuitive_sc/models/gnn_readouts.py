@@ -15,7 +15,7 @@ class LineEvo(nn.Module):
     def __init__(
         self,
         dim: int = 128,
-        dropout: float = 0,
+        dropout: float = 0.0,
         num_layers: int = 1,
         if_pos: bool = False,
     ) -> None:
@@ -46,7 +46,7 @@ class LineEvoLayer(nn.Module):
         self,
         in_dim: int = 128,
         dim: int = 128,
-        dropout: float = 0.1,
+        dropout: float = 0.0,
         if_pos: bool = False,
     ) -> None:
         super().__init__()

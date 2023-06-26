@@ -77,7 +77,7 @@ class GraphDatasetMem(InMemoryDataset):
         self.data, self.slices = torch.load(self.processed_path)
 
     @property
-    def processed_file_names(self) -> str | List[str] | Tuple:
+    def processed_file_names(self) -> Union[str, List[str, Tuple]]:
         return [self.processed_path]
 
     def process_mol(self, smiles: str):
