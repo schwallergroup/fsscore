@@ -2,6 +2,7 @@
 Create a graph dataset class that inherits from torch_geometric.data.Dataset.
 Code adapted from LineEvo (https://github.com/fate1997/LineEvo/tree/main)
 """
+import copy
 import os
 from collections import defaultdict
 from itertools import chain, combinations
@@ -14,6 +15,7 @@ import pandas as pd
 import torch
 from rdkit import Chem
 from torch_geometric.data import Data, Dataset, InMemoryDataset
+from torch_geometric.data.separate import separate
 from tqdm import tqdm
 
 from intuitive_sc.data.molgraph import NUM_NODE_FEATURES, MolGraph
@@ -74,7 +76,7 @@ class GraphDatasetMem(InMemoryDataset):
             pre_filter=None,
             pre_transform=self.pre_transform,
         )
-        self.data, self.slices = torch.load(self.processed_path)
+        self.data, self.slices = torch.load(self.processed_file_names[0])
 
     @property
     def processed_file_names(self) -> Union[str, List[Union[str, int]]]:
@@ -188,13 +190,41 @@ class GraphDatasetMem(InMemoryDataset):
         return self.data_list[index]
 
     def len(self):
-        return len(self.data_list)
+        return len(self.smiles)
 
     def __repr__(self):
         return f"GraphDataset({self.name}, num_mols={self.__len__()})"
 
+    # def get(self, ID: Union[int, str]) -> Data:
+    #     return self.data_list[self.ids.index(ID)]
+
     def get(self, ID: Union[int, str]) -> Data:
-        return self.data_list[self.ids.index(ID)]
+        """
+        Copied from torch_geometric.data.InMemoryDataset and adapt indexing based on ID.
+        """
+        idx = self._data["ID"].index(ID)
+
+        if self.len() == 1:
+            return copy.copy(self._data)
+
+        if not hasattr(self, "_data_list") or self._data_list is None:
+            self._data_list = self.len() * [None]
+        elif self._data_list[idx] is not None:
+            return copy.copy(self._data_list[idx])
+
+        data = separate(
+            cls=self._data.__class__,
+            batch=self._data,
+            idx=idx,
+            slice_dict=self.slices,
+            decrement=False,
+        )
+
+        self._data_list[idx] = copy.copy(data)
+
+        assert data["ID"] == ID
+
+        return data
 
     @property
     def node_dim(self) -> int:

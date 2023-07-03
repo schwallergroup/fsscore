@@ -298,8 +298,8 @@ if __name__ == "__main__":
         if args.subsample is not None:
             args.graph_datapath = os.path.join(
                 DATA_PATH,
-                f"{data_name}_sub{args.subsample}_\
-                    seed{args.seed}_evodepth{args.depth_edges}_graphs.pt",
+                f"{data_name}_sub{args.subsample}_seed{args.seed}_"
+                f"evodepth{args.depth_edges}_graphs.pt",
             )
         else:
             args.graph_datapath = os.path.join(
