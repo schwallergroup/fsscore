@@ -12,7 +12,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score
 from torch.optim import Adam
+from torch_geometric.data import Batch
 
+from intuitive_sc.data.graph_dataset import GraphData
 from intuitive_sc.models.gnn import AVAILABLE_GRAPH_ENCODERS
 
 _NOT_RECOGNISED_INPUT_TYPE = ValueError(
@@ -335,7 +337,7 @@ class LitRankNet(pl.LightningModule):
             (np.ndarray): Mean predictions of the batch.
             (np.ndarray, optional): Uncertainty measured as variance of the predictions.
         """
-        if isinstance(new_batch, Sequence):
+        if isinstance(new_batch, (Sequence)):
             if isinstance(new_batch[0], Sequence):
                 pred_fun = partial(self.net)
             elif isinstance(new_batch[0], torch.Tensor):
@@ -344,7 +346,11 @@ class LitRankNet(pl.LightningModule):
                 raise _NOT_RECOGNISED_INPUT_TYPE
             new_batch = new_batch[0]
 
-        elif isinstance(new_batch, torch.Tensor):
+        elif isinstance(new_batch, Batch):
+            # TODO write option so that I can return difference of preds (two inputs)
+            pred_fun = self.net.score
+
+        elif isinstance(new_batch, (torch.Tensor, GraphData)):
             pred_fun = self.net.score
         else:
             raise _NOT_RECOGNISED_INPUT_TYPE
