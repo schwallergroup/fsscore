@@ -71,10 +71,9 @@ class GNN(nn.Module):
                 raise ValueError("Indicator should be G or L.")
 
     def forward(self, graph: GraphData):
-        x, edge_index, edge_attr, pos, batch = (  # noqa: F841
+        x, edge_index, pos, batch = (
             graph.x,
             graph.edge_index,
-            graph.edge_attr,
             graph.pos,
             graph.batch,
         )
@@ -88,7 +87,9 @@ class GNN(nn.Module):
                 edges = getattr(graph, f"edges_{line_index}")
                 x, pos, batch, mol_repr = self.layers[i](x, edges, pos, batch)
                 line_index += 1
-                edge_index = to_undirected(edges.T)
+                if i < len(self.arrange) - 1:
+                    edges_evolve = getattr(graph, f"edges_{line_index}")
+                    edge_index = to_undirected(edges_evolve.T)
             mol_repr_all += mol_repr
 
         return mol_repr_all
