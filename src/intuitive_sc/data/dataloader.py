@@ -16,7 +16,7 @@ from intuitive_sc.data.featurizer import (
     GraphFeaturizer,
     get_featurizer,
 )
-from intuitive_sc.data.graph_dataset import GraphData
+from intuitive_sc.data.graph_dataset import GraphData, GraphDatasetMem
 from intuitive_sc.utils.logging import get_logger
 
 warnings.filterwarnings(
@@ -35,6 +35,7 @@ def get_dataloader(
     num_workers: Optional[int] = None,
     read_fn: Callable = Chem.MolFromSmiles,
     graphset: bool = False,
+    graph_dataset: Optional[GraphDatasetMem] = None,
 ) -> DataLoader:
     """Creates a pytorch dataloader from a list of molecular representations (SMILES).
 
@@ -48,20 +49,22 @@ def get_dataloader(
             Default is half of the available cores.
         read_fn: rdkit function to read molecules
     """
-    if isinstance(molrpr[0], (list, tuple)):
+    if isinstance(molrpr[0], (list, tuple)) and not graphset:
         data = PairDataset(
             molrpr=molrpr,
             target=target,
             featurizer=featurizer,
             read_fn=read_fn,
         )
-    elif isinstance(molrpr[0], str):
+    elif isinstance(molrpr[0], str) and not graphset:
         data = SingleDataset(
             molrpr=molrpr,
             target=target,
             featurizer=featurizer,
             read_fn=read_fn,
         )
+    elif graphset:
+        data = graph_dataset
     else:
         raise ValueError(
             "Could not recognize `molrpr` data format. Please check function signature"

@@ -21,8 +21,8 @@ class CustomDataModule(pl.LightningDataModule):
     def __init__(
         self,
         smiles: List[Tuple[str, str]],
-        target: Optional[List[float]],
         featurizer: str,
+        target: Optional[List[float]] = None,
         val_size: float = 0.2,
         batch_size: int = 32,
         use_fp: bool = False,
@@ -62,14 +62,13 @@ class CustomDataModule(pl.LightningDataModule):
         if not self.use_fp:
             # create graph dataset so not have to compute graph features every time
             LOGGER.info("Getting graph dataset.")
-            smiles_all = [s for pair in self.smiles for s in pair]
-            smiles_all = list(set(smiles_all))
             self.graph_dataset = GraphDatasetMem(
-                smiles=smiles_all,
+                smiles=self.smiles,
                 processed_path=self.graph_datapath,
                 # ids=None, TODO rn ids are smiles
                 use_geom=self.use_geom,
                 depth=self.depth_edges,
+                targets=self.target,
             )
             self.featurizer = get_featurizer(
                 self.featurizer, graph_dataset=self.graph_dataset
@@ -124,6 +123,7 @@ class CustomDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             read_fn=self.read_fn,
             graphset=True if self.graph_datapath else False,
+            graph_dataset=self.graph_dataset,
         )
 
     def val_dataloader(self) -> DataLoader:
@@ -138,6 +138,7 @@ class CustomDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             read_fn=self.read_fn,
             graphset=True if self.graph_datapath else False,
+            graph_dataset=self.graph_dataset,
         )
 
     def test_dataloader(self) -> DataLoader:
@@ -146,9 +147,11 @@ class CustomDataModule(pl.LightningDataModule):
             self.target_test,
             featurizer=self.featurizer,
             batch_size=self.batch_size,
+            shuffle=False,
             num_workers=self.num_workers,
             read_fn=self.read_fn,
             graphset=True if self.graph_datapath else False,
+            graph_dataset=self.graph_dataset,
         )
 
     def predict_dataloader(self) -> DataLoader:
@@ -156,9 +159,11 @@ class CustomDataModule(pl.LightningDataModule):
             self.smiles_predict,
             featurizer=self.featurizer,
             batch_size=self.batch_size,
+            shuffle=False,
             num_workers=self.num_workers,
             read_fn=self.read_fn,
             graphset=True if self.graph_datapath else False,
+            graph_dataset=self.graph_dataset,
         )
 
     def teardown(self, stage: str) -> None:

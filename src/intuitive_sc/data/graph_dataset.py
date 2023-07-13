@@ -6,7 +6,7 @@ import copy
 import os
 from collections import defaultdict
 from itertools import chain, combinations
-from typing import List, Union
+from typing import List, Tuple, Union
 
 # from torch_sparse import SparseTensor
 import networkx as nx
@@ -58,14 +58,20 @@ class GraphDatasetMem(InMemoryDataset):
         ids: List[str] = None,
         use_geom: bool = False,  # TODO add option to use confs instead of smiles
         depth: int = 1,
+        targets: List[float] = None,
     ):
         self.processed_path = processed_path
         self.smiles = smiles
+        if isinstance(smiles[0], str):
+            self.smiles_flat = smiles
+        elif isinstance(smiles[0], (list, tuple)):
+            self.smiles_flat = list(chain(*smiles))
         self.data_list = []
         self.use_geom = use_geom
         self.depth = depth
+        self.targets = targets
         if ids is None:
-            self.ids = self.smiles
+            self.ids = self.smiles_flat
         else:
             self.ids = ids
         self.featurizer = MolGraph(use_geometry=self.use_geom)
@@ -82,38 +88,8 @@ class GraphDatasetMem(InMemoryDataset):
     def processed_file_names(self) -> Union[str, List[Union[str, int]]]:
         return [self.processed_path]
 
-    def process_mol(self, smiles: str):
-        mol = Chem.MolFromSmiles(smiles)
-        feature_dict = self.featurizer(mol)
-        data = GraphData(ID=smiles)
-
-        # Positions
-        if "pos" not in feature_dict.keys() and self.use_geom:
-            print("Warning: No positions found for {}".format(smiles))
-        if self.use_geom:
-            data.pos = torch.tensor(feature_dict["pos"], dtype=torch.float16)
-
-        # Edge index and edges
-        data.edge_index = feature_dict["edge_index"]
-
-        # Edge_attr
-        if "edge_attr" in feature_dict.keys():
-            data.edge_attr = feature_dict["edge_attr"].clone().detach()
-            data.num_bonds_features = (
-                data.edge_attr.shape[1] if data.edge_attr.shape[0] != 0 else 0
-            )
-
-        data.x = feature_dict["x"].clone().detach()
-
-        # Representation info
-        data.num_bonds = data.edge_index.shape[1]
-        data.num_nodes_features = data.x.shape[1]
-        data.num_nodes = data.x.shape[0]
-
-        return data
-
     def process(self):
-        for i, smi in enumerate(tqdm(self.smiles, desc="graph data processing")):
+        for i, smi in enumerate(tqdm(self.smiles_flat, desc="graph data processing")):
             mol = Chem.MolFromSmiles(smi)
             feature_dict = self.featurizer(mol)
             data = GraphData(ID=self.ids[i])
@@ -122,7 +98,7 @@ class GraphDatasetMem(InMemoryDataset):
             if "pos" not in feature_dict.keys() and self.use_geom:
                 print("Warning: No positions found for molecule {}".format(self.ids[i]))
             if self.use_geom:
-                data.pos = torch.tensor(feature_dict["pos"], dtype=torch.float16)
+                data.pos = torch.tensor(feature_dict["pos"])
 
             # edge index and edges
             data.edge_index = feature_dict["edge_index"]
@@ -186,8 +162,8 @@ class GraphDatasetMem(InMemoryDataset):
 
                 setattr(data, f"edges_{i+1}", edges)
 
-    def __getitem__(self, index):
-        return self.data_list[index]
+    # def __getitem__(self, index):
+    #     return self.data_list[index]
 
     def len(self):
         return len(self.smiles)
@@ -198,17 +174,40 @@ class GraphDatasetMem(InMemoryDataset):
     # def get(self, ID: Union[int, str]) -> Data:
     #     return self.data_list[self.ids.index(ID)]
 
+    def __getitem__(
+        self, index: int
+    ) -> Union[
+        GraphData,
+        Tuple[GraphData, GraphData],
+        Tuple[Tuple[GraphData, GraphData], torch.Tensor],
+    ]:
+        if isinstance(self.smiles[0], (list, Tuple)):
+            smi_i, smi_j = self.smiles[index]
+            data_i = self.get(smi_i)
+            data_j = self.get(smi_j)
+            if self.targets is None:
+                return (data_i, data_j)
+            target = torch.FloatTensor([self.targets[index]])
+            return (data_i, data_j), target
+        elif isinstance(self.smiles[0], str):
+            smi = self.smiles[index]
+            data = self.get(smi)
+            if self.targets is None:
+                return data
+            target = torch.FloatTensor([self.targets[index]])
+            return data, target
+
     def get(self, ID: Union[int, str]) -> Data:
         """
         Copied from torch_geometric.data.InMemoryDataset and adapt indexing based on ID.
         """
         idx = self._data["ID"].index(ID)
 
-        if self.len() == 1:
+        if len(self.smiles_flat) == 1:
             return copy.copy(self._data)
 
         if not hasattr(self, "_data_list") or self._data_list is None:
-            self._data_list = self.len() * [None]
+            self._data_list = len(self.smiles_flat) * [None]
         elif self._data_list[idx] is not None:
             return copy.copy(self._data_list[idx])
 
@@ -266,7 +265,7 @@ class GraphDataset(Dataset):
         if "pos" not in feature_dict.keys() and self.use_geom:
             print("Warning: No positions found for {}".format(smiles))
         if self.use_geom:
-            data.pos = torch.tensor(feature_dict["pos"], dtype=torch.float16)
+            data.pos = torch.tensor(feature_dict["pos"])
 
         # Edge index and edges
         data.edge_index = feature_dict["edge_index"]
@@ -297,7 +296,7 @@ class GraphDataset(Dataset):
             if "pos" not in feature_dict.keys() and self.use_geom:
                 print("Warning: No positions found for molecule {}".format(self.ids[i]))
             if self.use_geom:
-                data.pos = torch.tensor(feature_dict["pos"], dtype=torch.float16)
+                data.pos = torch.tensor(feature_dict["pos"])
 
             # edge index and edges
             data.edge_index = feature_dict["edge_index"]

@@ -192,5 +192,5 @@ if __name__ == "__main__":
     mol = rdkit.Chem.MolFromSmiles(smi)
     morgan = MorganFingerprint()
     print(morgan.get_feat(mol))
-    graph = GraphFeaturizer()
+    graph = Graph2DFeaturizer()
     print(graph.get_feat(mol))

@@ -63,3 +63,4 @@ models/*
 lightning_logs
 data/raw
 data/processed
+results/*
