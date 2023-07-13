@@ -18,9 +18,12 @@ from intuitive_sc.data.featurizer import (
 from intuitive_sc.models.gnn import AVAILABLE_GRAPH_ENCODERS
 from intuitive_sc.models.nn_utils import get_new_model_and_trainer
 from intuitive_sc.utils.logging import get_logger
-from intuitive_sc.utils.paths import DATA_PATH, MODEL_PATH
+from intuitive_sc.utils.paths import DATA_PATH, INPUT_TRAIN_PATH, MODEL_PATH
 
 LOGGER = get_logger(__name__)
+
+# https://github.com/facebookresearch/maskrcnn-benchmark/issues/103
+torch.multiprocessing.set_sharing_strategy("file_system")
 
 
 # TODO add option to have different loss (so could also have hinge loss)
@@ -132,7 +135,7 @@ if __name__ == "__main__":
         type=str,
         help="Path to the csv file. Must contain columns 'smiles_i', 'smiles_j'\
             and 'target'",
-        default=os.path.join(DATA_PATH, "data.csv"),
+        default=INPUT_TRAIN_PATH,
     )
     parser.add_argument(
         "--graph_datapath",
@@ -196,8 +199,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--log_every",
         type=int,
-        help="Log every n epochs",
-        default=10,
+        help="Log every n steps",
+        default=100,
     )
     parser.add_argument(
         "--val_size",
@@ -262,12 +265,6 @@ if __name__ == "__main__":
         action="store_true",
         help="Whether to use a fixed train/val split",
     )
-    parser.add_argument(
-        "--depth_edges",
-        type=int,
-        help="Number of depth edges for LineEvo",
-        default=1,
-    )
 
     args = parser.parse_args()
 
@@ -293,17 +290,22 @@ if __name__ == "__main__":
     if args.fixed_split:
         val_indices = df[df["split"] == "val"].index.tolist()
 
+    # depth edges depends on num LineEvo layers (arrange_layers)
+    depth_edges = args.arrange_layers.count("L") - 1
+    if args.arrange_layers[-1] != "L":
+        depth_edges += 1
+
     if args.graph_datapath is None and not args.use_fp:
         data_name = os.path.basename(args.data_path).split(".")[0]
         if args.subsample is not None:
             args.graph_datapath = os.path.join(
                 DATA_PATH,
                 f"{data_name}_sub{args.subsample}_seed{args.seed}_"
-                f"evodepth{args.depth_edges}_graphs.pt",
+                f"evodepth{depth_edges}_graphs.pt",
             )
         else:
             args.graph_datapath = os.path.join(
-                DATA_PATH, f"{data_name}_evodepth{args.depth_edges}_graphs.pt"
+                DATA_PATH, f"{data_name}_evodepth{depth_edges}_graphs.pt"
             )
 
     train(
@@ -328,5 +330,5 @@ if __name__ == "__main__":
         resume_training=args.resume_training,
         arrange_layers=args.arrange_layers,
         val_indices=val_indices if args.fixed_split else None,
-        depth_edges=args.depth_edges,
+        depth_edges=depth_edges,
     )
