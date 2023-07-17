@@ -23,6 +23,7 @@ def get_new_model_and_trainer(
     use_fp: bool = False,
     use_geom: bool = False,
     arrange: str = "GGLGGL",
+    reload_interval: int = 0,
 ) -> Tuple[LitRankNet, pl.Trainer]:
     """
     Creates a new RankNet model and trainer.
@@ -95,7 +96,7 @@ def get_new_model_and_trainer(
         callbacks=[ckpt],
         deterministic=False,  # some components cannot be deterministic
         profiler="simple",
-        val_check_interval=0.25,
+        reload_dataloaders_every_n_epochs=reload_interval,
     )
 
     return model, trainer

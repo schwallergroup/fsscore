@@ -29,13 +29,15 @@ LOGGER = get_logger(__name__)
 def get_dataloader(
     molrpr: Union[List[str], List[Tuple[str, str]]],
     target: Optional[Union[List, np.ndarray]] = None,
+    use_fp: bool = False,
     batch_size: int = 32,
     shuffle: bool = False,
     featurizer: Optional[Featurizer] = None,
     num_workers: Optional[int] = None,
     read_fn: Callable = Chem.MolFromSmiles,
-    graphset: bool = False,
-    graph_dataset: Optional[GraphDatasetMem] = None,
+    use_geom: bool = False,
+    depth_edges: int = 1,
+    graph_datapath: str = None,
 ) -> DataLoader:
     """Creates a pytorch dataloader from a list of molecular representations (SMILES).
 
@@ -49,21 +51,25 @@ def get_dataloader(
             Default is half of the available cores.
         read_fn: rdkit function to read molecules
     """
-    if isinstance(molrpr[0], (list, tuple)) and not graphset:
+    graph_dataset, featurizer = prepare_data(
+        molrpr, use_fp, featurizer, graph_datapath, use_geom, depth_edges, target
+    )
+
+    if isinstance(molrpr[0], (list, tuple)) and use_fp:
         data = PairDataset(
             molrpr=molrpr,
             target=target,
             featurizer=featurizer,
             read_fn=read_fn,
         )
-    elif isinstance(molrpr[0], str) and not graphset:
+    elif isinstance(molrpr[0], str) and use_fp:
         data = SingleDataset(
             molrpr=molrpr,
             target=target,
             featurizer=featurizer,
             read_fn=read_fn,
         )
-    elif graphset:
+    elif not use_fp:
         data = graph_dataset
     else:
         raise ValueError(
@@ -73,7 +79,7 @@ def get_dataloader(
     if num_workers is None:
         num_workers = multiprocessing.cpu_count() // 2
 
-    if graphset:
+    if graph_dataset:
         return GraphDataLoader(
             data,
             batch_size=batch_size,
@@ -89,6 +95,34 @@ def get_dataloader(
             num_workers=num_workers,
             pin_memory=True,
         )
+
+
+def prepare_data(
+    smiles: List[str],
+    use_fp: bool,
+    featurizer: str,
+    graph_datapath: str,
+    use_geom: bool,
+    depth_edges: int,
+    target: str,
+) -> Tuple[GraphDatasetMem, Featurizer]:
+    if not use_fp:
+        # create graph dataset so not have to compute graph features every time
+        LOGGER.info("Getting graph dataset.")
+        graph_dataset = GraphDatasetMem(
+            smiles=smiles,
+            processed_path=graph_datapath,
+            # ids=None, TODO rn ids are smiles
+            use_geom=use_geom,
+            depth=depth_edges,
+            targets=target,
+        )
+        featurizer = None
+    else:
+        graph_dataset = None
+        featurizer = get_featurizer(featurizer, nbits=2048)
+
+    return graph_dataset, featurizer
 
 
 class BaseDataset(Dataset, abc.ABC):

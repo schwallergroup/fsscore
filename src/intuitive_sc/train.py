@@ -52,6 +52,7 @@ def train(
     val_indices: Optional[List[int]] = None,
     use_geom: bool = False,  # TODO hard-coded - build option to use 3D graphs
     depth_edges: int = 1,
+    reload_interval: int = 0,
 ) -> None:
     """
     Trains a model to rank molecules.
@@ -75,7 +76,18 @@ def train(
         mc_dropout_samples: Number of MC dropout samples
         dropout_p: Dropout probability
         loss_fn: Loss function
+        resume_training: Whether to resume training from last checkpoint
+        arrange_layers: How to arrange graph readout layers in the model
+        val_indices: List of indices to use for validation
+        use_geom: Whether to use 3D geometry (coords) in the graph
+        depth_edges: Number of edges to add between atoms separated by 1 bond
+        reload_interval: Reload data every n epochs
     """
+    if reload_interval > 0:
+        num_fracs = n_epochs // reload_interval
+    else:
+        num_fracs = 1
+
     dm = CustomDataModule(
         smiles=smiles,
         target=target,
@@ -91,12 +103,13 @@ def train(
         random_split=True if val_indices is None else False,
         val_indices=val_indices,
         depth_edges=depth_edges,
+        num_fracs=num_fracs,
     )
 
     # get model and trainer
     model, trainer = get_new_model_and_trainer(
         save_dir=save_dir,
-        input_size=dm.featurizer.dim(),
+        input_size=dm.dim,
         lr=lr,
         reg_factor=regularization_factor,
         n_epochs=n_epochs,
@@ -108,6 +121,7 @@ def train(
         use_fp=use_fp,
         use_geom=use_geom,
         arrange=arrange_layers,
+        reload_interval=reload_interval,
     )
 
     # access last checkpoint
@@ -265,6 +279,12 @@ if __name__ == "__main__":
         action="store_true",
         help="Whether to use a fixed train/val split",
     )
+    parser.add_argument(
+        "--reload_interval",
+        type=int,
+        help="Reload the dataset every n epochs",
+        default=0,
+    )
 
     args = parser.parse_args()
 
@@ -331,4 +351,5 @@ if __name__ == "__main__":
         arrange_layers=args.arrange_layers,
         val_indices=val_indices if args.fixed_split else None,
         depth_edges=depth_edges,
+        reload_interval=args.reload_interval,
     )
