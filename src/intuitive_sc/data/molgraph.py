@@ -19,7 +19,7 @@ ATOM_TYPES = ["H", "B", "C", "N", "O", "F", "Si", "P", "S", "Cl", "Br", "I", "Se
 CHARGES = list(range(-4, 5))
 DEGREES = list(range(5))
 HYBRIDIZATIONS = list(range(len(Chem.HybridizationType.names) - 1))
-CHIRAL_TAGS = list(range(len(Chem.ChiralType.names) - 1))
+CHIRAL_TAGS = ["S", "R", "?"]
 BOND_TYPES = [
     Chem.rdchem.BondType.SINGLE,
     Chem.rdchem.BondType.DOUBLE,
@@ -68,6 +68,9 @@ class MolGraph(abc.ABC):
     def _get_node_features(self):
         """Instantiates node (atom) features"""
         atoms = map(self.mol.GetAtomWithIdx, range(self.n_atoms))
+        self.chiral_centers = Chem.FindMolChiralCenters(
+            self.mol, includeUnassigned=True
+        )
         self.node_features = torch.tensor(
             np.array([self._atom_featurizer(atom) for atom in atoms]),
             dtype=torch.float,
@@ -124,7 +127,11 @@ class MolGraph(abc.ABC):
         in_ring = 1 if atom.IsInRing() else 0
         is_aromatic = 1 if atom.GetIsAromatic() else 0
         hybrid_one_hot = one_hot_encoding(atom.GetHybridization(), HYBRIDIZATIONS)
-        chiral_tag_one_hot = one_hot_encoding(atom.GetChiralTag(), CHIRAL_TAGS)
+        for center in self.chiral_centers:
+            if center[0] == atom.GetIdx():
+                chiral_tag_one_hot = one_hot_encoding(center[1], CHIRAL_TAGS)
+                break
+        chiral_tag_one_hot = one_hot_encoding("not_chiral", CHIRAL_TAGS)
 
         return np.concatenate(
             [
