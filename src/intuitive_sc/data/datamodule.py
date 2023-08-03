@@ -29,7 +29,6 @@ class CustomDataModule(pl.LightningDataModule):
         graph_datapath: str = None,
         random_split: bool = True,
         val_indices: List[int] = None,
-        seed: int = 42,
         num_workers: int = None,
         depth_edges: int = 1,
         read_fn: Callable = Chem.MolFromSmiles,
@@ -46,13 +45,13 @@ class CustomDataModule(pl.LightningDataModule):
         self.graph_datapath = graph_datapath
         self.random_split = random_split
         self.val_indices = val_indices
-        self.seed = seed
         self.num_workers = num_workers
         self.depth_edges = depth_edges
         self.read_fn = read_fn
         self.num_fracs = num_fracs
         self.frac_index = 0
         self.dim = 2048 if self.use_fp else NUM_NODE_FEATURES  # TODO hard coded
+        self.val_dataloader_instance = None
 
     # def prepare_data(self) -> None:
     #     """
@@ -83,9 +82,6 @@ class CustomDataModule(pl.LightningDataModule):
         Beware of memory issues when using multiple workers.
         """
         if stage == "fit" and self.random_split:
-            # XXX uncomment if use pyg.data.Dataset instead of InMemoryDataset
-            # if not self.use_fp:
-            # self.graph_dataset.load_data()
             (
                 self.smiles_train,
                 self.smiles_val,
@@ -95,9 +91,7 @@ class CustomDataModule(pl.LightningDataModule):
                 self.smiles,
                 self.target,
                 test_size=self.val_size,
-                random_state=self.seed,
             )
-            # TODO check
             if self.num_fracs > 1:
                 # split into num_fracs fractions (last fraction might be smaller)
                 self.smiles_train = [
@@ -134,7 +128,11 @@ class CustomDataModule(pl.LightningDataModule):
                 self.graph_datapath.split(".pt")[0] + f"_frac{self.frac_index}.pt"
             )
             self.frac_index += 1
-        return get_dataloader(
+        if hasattr(self, "train_dataloader_instance"):
+            del self.train_dataloader_instance.dataset
+            del self.train_dataloader_instance
+            self.train_dataloader_instance = None
+        self.train_dataloader_instance = get_dataloader(
             smiles_current,
             target_current,
             use_fp=self.use_fp,
@@ -146,6 +144,7 @@ class CustomDataModule(pl.LightningDataModule):
             use_geom=self.use_geom,
             depth_edges=self.depth_edges,
         )
+        return self.train_dataloader_instance
 
     def val_dataloader(self) -> DataLoader:
         if self.smiles_val is None:
@@ -153,18 +152,21 @@ class CustomDataModule(pl.LightningDataModule):
             return None
         val_frac = int(self.val_size * 100)
         current_graphpath = self.graph_datapath.split(".pt")[0] + f"_val{val_frac}.pt"
-        return get_dataloader(
-            self.smiles_val,
-            self.target_val,
-            use_fp=self.use_fp,
-            featurizer=self.featurizer,
-            batch_size=self.batch_size,
-            num_workers=self.num_workers,
-            read_fn=self.read_fn,
-            graph_datapath=current_graphpath,
-            use_geom=self.use_geom,
-            depth_edges=self.depth_edges,
-        )
+        if self.val_dataloader_instance is None:
+            # don't want to reload val (only train) when activating reload_dataloaders
+            self.val_dataloader_instance = get_dataloader(
+                self.smiles_val,
+                self.target_val,
+                use_fp=self.use_fp,
+                featurizer=self.featurizer,
+                batch_size=self.batch_size,
+                num_workers=self.num_workers,
+                read_fn=self.read_fn,
+                graph_datapath=current_graphpath,
+                use_geom=self.use_geom,
+                depth_edges=self.depth_edges,
+            )
+        return self.val_dataloader_instance
 
     def test_dataloader(self) -> DataLoader:
         return get_dataloader(

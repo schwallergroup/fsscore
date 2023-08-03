@@ -40,7 +40,6 @@ def train(
     n_epochs: int = 100,
     log_every: int = 10,
     val_size: float = 0.0,
-    seed: Optional[int] = None,
     batch_size: int = 32,
     num_workers: Optional[int] = None,
     read_fn: Callable = Chem.MolFromSmiles,
@@ -69,7 +68,6 @@ def train(
         n_epochs: Number of epochs
         log_every: Log every n epochs
         val_size: Validation size for random split
-        seed: Random seed
         batch_size: Batch size
         num_workers: Number of workers
         read_fn: rdkit function to read molecules
@@ -95,7 +93,6 @@ def train(
         graph_datapath=graph_datapath,
         use_fp=use_fp,
         val_size=val_size,
-        seed=seed,
         batch_size=batch_size,
         num_workers=num_workers,
         read_fn=read_fn,
@@ -340,7 +337,6 @@ if __name__ == "__main__":
         n_epochs=args.n_epochs,
         log_every=args.log_every,
         val_size=args.val_size,
-        seed=args.seed,
         batch_size=args.batch_size,
         num_workers=args.num_workers,
         mc_dropout_samples=args.mc_dropout_samples,
