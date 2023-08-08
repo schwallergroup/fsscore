@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from pytorch_lightning.loggers import WandbLogger
 
 from intuitive_sc.models.ranknet import LitRankNet, RankNet
+from intuitive_sc.utils.earlyreloading import DataLoaderReloader
 
 
 def get_new_model_and_trainer(
@@ -24,6 +25,7 @@ def get_new_model_and_trainer(
     use_geom: bool = False,
     arrange: str = "GGLGGL",
     reload_interval: int = 0,
+    early_reloading: bool = False,
 ) -> Tuple[LitRankNet, pl.Trainer]:
     """
     Creates a new RankNet model and trainer.
@@ -62,6 +64,14 @@ def get_new_model_and_trainer(
         save_last=True,
     )
 
+    data_loader_reloader = DataLoaderReloader(
+        monitor="val/loss",
+        mode="min",
+        patience=3,
+        reload_every_n_epochs=reload_interval,
+        check_on_train_epoch_end=False,
+    )
+
     net = RankNet(
         input_size=input_size,
         hidden_size=256,  # TODO hard coded
@@ -93,10 +103,10 @@ def get_new_model_and_trainer(
         strategy="ddp",
         max_epochs=n_epochs,
         log_every_n_steps=log_every,
-        callbacks=[ckpt],
+        callbacks=[ckpt] + ([data_loader_reloader] if early_reloading else []),
         deterministic=False,  # some components cannot be deterministic
         profiler="simple",
-        reload_dataloaders_every_n_epochs=reload_interval,
+        reload_dataloaders_every_n_epochs=reload_interval if not early_reloading else 0,
     )
 
     return model, trainer

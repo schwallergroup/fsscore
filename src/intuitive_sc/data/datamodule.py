@@ -53,28 +53,6 @@ class CustomDataModule(pl.LightningDataModule):
         self.dim = 2048 if self.use_fp else NUM_NODE_FEATURES  # TODO hard coded
         self.val_dataloader_instance = None
 
-    # def prepare_data(self) -> None:
-    #     """
-    #     Prepare dataset for training and testing.
-    #     """
-    #     if not self.use_fp:
-    #         # create graph dataset so not have to compute graph features every time
-    #         LOGGER.info("Getting graph dataset.")
-    #         self.graph_dataset = GraphDatasetMem(
-    #             smiles=self.smiles,
-    #             processed_path=self.graph_datapath,
-    #             # ids=None, TODO rn ids are smiles
-    #             use_geom=self.use_geom,
-    #             depth=self.depth_edges,
-    #             targets=self.target,
-    #         )
-    #         self.featurizer = None #get_featurizer(
-    #         #     self.featurizer, graph_dataset=self.graph_dataset
-    #         # )
-    #     else:
-    #         self.graph_dataset = None
-    #         self.featurizer = get_featurizer(self.featurizer, nbits=2048)
-
     def setup(self, stage: str) -> None:
         """
         Split data into train, val, test, predict sets.
@@ -124,6 +102,7 @@ class CustomDataModule(pl.LightningDataModule):
         target_current = self.target_train[self.frac_index]
         current_graphpath = self.graph_datapath
         if self.num_fracs > 1:
+            LOGGER.info(f"Using fraction {self.frac_index+1} out of {self.num_fracs}.")
             current_graphpath = (
                 self.graph_datapath.split(".pt")[0] + f"_frac{self.frac_index}.pt"
             )

@@ -52,6 +52,7 @@ def train(
     use_geom: bool = False,  # TODO hard-coded - build option to use 3D graphs
     depth_edges: int = 1,
     reload_interval: int = 0,
+    early_reloading: bool = False,
 ) -> None:
     """
     Trains a model to rank molecules.
@@ -119,6 +120,7 @@ def train(
         use_geom=use_geom,
         arrange=arrange_layers,
         reload_interval=reload_interval,
+        early_reloading=early_reloading,
     )
 
     # access last checkpoint
@@ -282,6 +284,11 @@ if __name__ == "__main__":
         help="Reload the dataset every n epochs",
         default=0,
     )
+    parser.add_argument(
+        "--early_reloading",
+        action="store_true",
+        help="Reload the dataset before the end of the epoch",
+    )
 
     args = parser.parse_args()
 
@@ -293,6 +300,9 @@ if __name__ == "__main__":
         raise ValueError(
             f"Cannot use FP featurizer {args.featurizer} without fingerprints"
         )
+
+    if args.early_reloading and args.reload_interval == 0:
+        raise ValueError("Cannot use early reloading without reloading interval")
 
     os.makedirs(MODEL_PATH, exist_ok=True)
 
@@ -348,4 +358,5 @@ if __name__ == "__main__":
         val_indices=val_indices if args.fixed_split else None,
         depth_edges=depth_edges,
         reload_interval=args.reload_interval,
+        early_reloading=args.early_reloading,
     )
