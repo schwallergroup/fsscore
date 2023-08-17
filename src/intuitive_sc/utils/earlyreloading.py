@@ -1,6 +1,4 @@
-import numpy as np
 import pytorch_lightning as pl
-import torch
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
 from intuitive_sc.utils.logging import get_logger
@@ -62,9 +60,7 @@ class DataLoaderReloader(EarlyStopping):
             LOGGER.info("Validation threshold reached. Early reloading the dataloader.")
             self.num_reloads += 1
             self.epochs_wo_reload = 0
-            # reset best_score and count to prevent early stopping in the next epoch
-            torch_inf = torch.tensor(np.Inf)
-            self.best_score = torch_inf if self.monitor_op == torch.lt else -torch_inf
+            # reset count to prevent early stopping in the next epoch
             self.wait_count = 0
             trainer.datamodule.train_dataloader()
         elif (
@@ -78,11 +74,7 @@ class DataLoaderReloader(EarlyStopping):
                     f"Reloading dataloader after {self.reload_every_n_epochs} epochs."
                 )
                 self.epochs_wo_reload = 0
-                # reset best_score and count to prevent early stopping in the next epoch
-                torch_inf = torch.tensor(np.Inf)
-                self.best_score = (
-                    torch_inf if self.monitor_op == torch.lt else -torch_inf
-                )
+                # reset count to prevent early stopping in the next epoch
                 self.wait_count = 0
                 self.num_reloads += 1
                 trainer.datamodule.train_dataloader()
