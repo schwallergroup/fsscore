@@ -27,12 +27,12 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 
 # TODO add option to have different loss (so could also have hinge loss)
-# TODO should have option for fixed train/validation/test split (make in datamodule)
 def train(
     smiles: List[Tuple[str, str]],
     target: List[float],
     graph_datapath: Optional[str] = None,
     save_dir: Optional[str] = None,
+    featurizer: str = "graph_2D",
     graph_encoder: Optional[str] = None,
     use_fp: bool = False,
     lr: float = 3e-4,
@@ -53,6 +53,7 @@ def train(
     depth_edges: int = 1,
     reload_interval: int = 0,
     early_reloading: bool = False,
+    cl_indices: Optional[List[List[int]]] = None,
 ) -> None:
     """
     Trains a model to rank molecules.
@@ -81,8 +82,13 @@ def train(
         use_geom: Whether to use 3D geometry (coords) in the graph
         depth_edges: Number of edges to add between atoms separated by 1 bond
         reload_interval: Reload data every n epochs
+        early_reloading: Whether to reload data before the end of the epoch
+        cl_indices: List of indices to use for curriculum learning
     """
-    if reload_interval > 0:
+    if cl_indices is not None:
+        num_fracs = len(cl_indices)
+        n_epochs = reload_interval * num_fracs
+    elif reload_interval > 0:
         num_fracs = n_epochs // reload_interval
     else:
         num_fracs = 1
@@ -90,7 +96,7 @@ def train(
     dm = CustomDataModule(
         smiles=smiles,
         target=target,
-        featurizer=args.featurizer,
+        featurizer=featurizer,
         graph_datapath=graph_datapath,
         use_fp=use_fp,
         val_size=val_size,
@@ -102,6 +108,7 @@ def train(
         val_indices=val_indices,
         depth_edges=depth_edges,
         num_fracs=num_fracs,
+        cl_indices=cl_indices,
     )
 
     # get model and trainer
@@ -206,7 +213,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n_epochs",
         type=int,
-        help="Number of epochs",
+        help="Number of epochs.",
         default=100,
     )
     parser.add_argument(
@@ -289,6 +296,17 @@ if __name__ == "__main__":
         action="store_true",
         help="Reload the dataset before the end of the epoch",
     )
+    parser.add_argument(
+        "--curriculum",
+        action="store_true",
+        help="Whether to use curriculum learning.",
+    )
+    parser.add_argument(
+        "--CL_label",
+        type=str,
+        help="Column name to use for curriculum learning splits.",
+        default="tanimoto_bin",
+    )
 
     args = parser.parse_args()
 
@@ -314,6 +332,15 @@ if __name__ == "__main__":
         df = df.sample(args.subsample, random_state=args.seed).reset_index(drop=True)
     smiles_pairs = df[args.compound_cols].values.tolist()
     target = df[args.rating_col].values.tolist()
+
+    if args.curriculum:
+        # get df indices based on CL_label
+        if args.CL_label not in df.columns:
+            raise ValueError(f"Column {args.CL_label} not in dataframe")
+        cl_indices = df.groupby(args.CL_label).apply(lambda x: x.index.tolist())
+        if args.reload_interval == 0:
+            args.reload_interval = args.n_epochs // len(cl_indices)
+
     if args.fixed_split:
         val_indices = df[df["split"] == "val"].index.tolist()
 
@@ -340,6 +367,7 @@ if __name__ == "__main__":
         target=target,
         graph_datapath=args.graph_datapath,
         save_dir=args.save_dir,
+        featurizer=args.featurizer,
         graph_encoder=args.graph_encoder,
         use_fp=args.use_fp,
         lr=args.lr,
@@ -359,4 +387,5 @@ if __name__ == "__main__":
         depth_edges=depth_edges,
         reload_interval=args.reload_interval,
         early_reloading=args.early_reloading,
+        cl_indices=cl_indices if args.curriculum else None,
     )

@@ -33,6 +33,7 @@ class CustomDataModule(pl.LightningDataModule):
         depth_edges: int = 1,
         read_fn: Callable = Chem.MolFromSmiles,
         num_fracs: int = 1,
+        cl_indices: List[List[int]] = None,
     ) -> None:
         super().__init__()
         self.smiles = smiles
@@ -52,6 +53,7 @@ class CustomDataModule(pl.LightningDataModule):
         self.frac_index = 0
         self.dim = 2048 if self.use_fp else NUM_NODE_FEATURES  # TODO hard coded
         self.val_dataloader_instance = None
+        self.cl_indices = cl_indices
 
     def setup(self, stage: str) -> None:
         """
@@ -60,36 +62,62 @@ class CustomDataModule(pl.LightningDataModule):
         Beware of memory issues when using multiple workers.
         """
         if stage == "fit" and self.random_split:
+            if self.cl_indices is not None:
+                cl_indices_flat = [i for indices in self.cl_indices for i in indices]
+            else:
+                cl_indices_flat = 10 * [None]
             (
                 self.smiles_train,
                 self.smiles_val,
                 self.target_train,
                 self.target_val,
+                self.cl_indices_train_flat,
+                self.cl_indices_val_flat,
             ) = train_test_split(
                 self.smiles,
                 self.target,
+                cl_indices_flat,
                 test_size=self.val_size,
             )
             if self.num_fracs > 1:
-                # split into num_fracs fractions (last fraction might be smaller)
-                self.smiles_train = [
-                    self.smiles_train[i :: self.num_fracs]
-                    for i in range(self.num_fracs)
-                ]
-                self.target_train = [
-                    self.target_train[i :: self.num_fracs]
-                    for i in range(self.num_fracs)
-                ]
+                if self.cl_indices is not None:
+                    # use predefined splits for curriculum learning
+                    LOGGER.info("Using predefined splits for curriculum learning.")
+                    # group by given self.cl_indices
+                    cl_indices_val_set = set(self.cl_indices_val_flat)
+                    cl_indices_train = [
+                        [i for i in indices if i not in cl_indices_val_set]
+                        for indices in self.cl_indices
+                    ]
+                    self.smiles_train = [
+                        [self.smiles[i] for i in indices]
+                        for indices in cl_indices_train
+                    ]
+                    self.target_train = [
+                        [self.target[i] for i in indices]
+                        for indices in cl_indices_train
+                    ]
+                    self.smiles_val = [self.smiles[i] for i in self.cl_indices_val_flat]
+                    self.target_val = [self.target[i] for i in self.cl_indices_val_flat]
+
+                else:
+                    LOGGER.info(f"Splitting data into {self.num_fracs} fractions.")
+                    # split into num_fracs fractions (last fraction might be smaller)
+                    self.smiles_train = [
+                        self.smiles_train[i :: self.num_fracs]
+                        for i in range(self.num_fracs)
+                    ]
+                    self.target_train = [
+                        self.target_train[i :: self.num_fracs]
+                        for i in range(self.num_fracs)
+                    ]
             else:
                 self.smiles_train = [self.smiles_train]
                 self.target_train = [self.target_train]
 
         if stage == "fit" and not self.random_split:
             # TODO implement version of sequential learning here
-            self.smiles_train = [[self.smiles[i] for i in self.val_indices]]
-            self.smiles_val = [self.smiles[i] for i in self.val_indices]
-            self.target_train = [[self.target[i] for i in self.val_indices]]
-            self.target_val = [self.target[i] for i in self.val_indices]
+            raise NotImplementedError
 
         if stage == "test":
             pass  # TODO create holdout set
@@ -103,9 +131,14 @@ class CustomDataModule(pl.LightningDataModule):
         current_graphpath = self.graph_datapath
         if self.num_fracs > 1:
             LOGGER.info(f"Using fraction {self.frac_index+1} out of {self.num_fracs}.")
-            current_graphpath = (
-                self.graph_datapath.split(".pt")[0] + f"_frac{self.frac_index}.pt"
-            )
+            if self.cl_indices is not None:
+                current_graphpath = (
+                    self.graph_datapath.split(".pt")[0] + f"_cl{self.frac_index}.pt"
+                )
+            else:
+                current_graphpath = (
+                    self.graph_datapath.split(".pt")[0] + f"_frac{self.frac_index}.pt"
+                )
             self.frac_index += 1
         if hasattr(self, "train_dataloader_instance"):
             del self.train_dataloader_instance.dataset
@@ -130,7 +163,10 @@ class CustomDataModule(pl.LightningDataModule):
             LOGGER.info("No validation set. Trains on full dataset (for production).")
             return None
         val_frac = int(self.val_size * 100)
-        current_graphpath = self.graph_datapath.split(".pt")[0] + f"_val{val_frac}.pt"
+        current_graphpath = (
+            self.graph_datapath.split(".pt")[0]
+            + f"_val{val_frac}_seed{pl.seed_everything()}.pt"
+        )
         if self.val_dataloader_instance is None:
             # don't want to reload val (only train) when activating reload_dataloaders
             self.val_dataloader_instance = get_dataloader(
