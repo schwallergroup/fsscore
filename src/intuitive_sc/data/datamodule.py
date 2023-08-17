@@ -65,7 +65,7 @@ class CustomDataModule(pl.LightningDataModule):
             if self.cl_indices is not None:
                 cl_indices_flat = [i for indices in self.cl_indices for i in indices]
             else:
-                cl_indices_flat = 10 * [None]
+                cl_indices_flat = len(self.smiles) * [None]
             (
                 self.smiles_train,
                 self.smiles_val,
