@@ -64,6 +64,10 @@ def register_featurizer(name: str):
         if issubclass(cls, FingerprintFeaturizer):
             AVAILABLE_FP_FEATURIZERS[name] = partial(cls, count=False)
             AVAILABLE_FP_FEATURIZERS[name + "_count"] = partial(cls, count=True)
+            AVAILABLE_FP_FEATURIZERS[name + "_chiral"] = partial(cls, chiral=True)
+            AVAILABLE_FP_FEATURIZERS[name + "_count_chiral"] = partial(
+                cls, count=True, chiral=True
+            )
         elif issubclass(cls, GraphFeaturizer):
             AVAILABLE_GRAPH_FEATURIZERS[name] = cls
         else:
@@ -76,7 +80,11 @@ def register_featurizer(name: str):
 @register_featurizer(name="morgan")
 class MorganFingerprint(FingerprintFeaturizer):
     def __init__(
-        self, nbits: int = 2048, bond_radius: int = 2, count: bool = False
+        self,
+        nbits: int = 2048,
+        bond_radius: int = 2,
+        count: bool = False,
+        chiral: bool = False,
     ) -> None:
         """Base class for Morgan fingerprinting featurizer.
 
@@ -87,6 +95,7 @@ class MorganFingerprint(FingerprintFeaturizer):
         """
         self.bond_radius = bond_radius
         self.count = count
+        self.chiral = chiral
         super().__init__(nbits=nbits)
 
     def get_feat(self, mol: rdkit.Chem.rdchem.Mol) -> np.ndarray:
@@ -95,7 +104,7 @@ class MorganFingerprint(FingerprintFeaturizer):
             if self.count
             else AllChem.GetMorganFingerprintAsBitVect
         )
-        fp = fp_fun(mol, self.bond_radius, self.nbits)
+        fp = fp_fun(mol, self.bond_radius, self.nbits, useChirality=self.chiral)
         arr = np.zeros((1,), dtype=np.float16)
         DataStructs.ConvertToNumpyArray(fp, arr)
         return arr
