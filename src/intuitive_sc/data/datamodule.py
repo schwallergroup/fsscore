@@ -166,6 +166,8 @@ class CustomDataModule(pl.LightningDataModule):
         current_graphpath = (
             self.graph_datapath.split(".pt")[0]
             + f"_val{val_frac}_seed{pl.seed_everything()}.pt"
+            if self.graph_datapath
+            else None
         )
         if self.val_dataloader_instance is None:
             # don't want to reload val (only train) when activating reload_dataloaders
