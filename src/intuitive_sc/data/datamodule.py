@@ -134,10 +134,14 @@ class CustomDataModule(pl.LightningDataModule):
             if self.cl_indices is not None:
                 current_graphpath = (
                     self.graph_datapath.split(".pt")[0] + f"_cl{self.frac_index}.pt"
+                    if self.graph_datapath
+                    else None
                 )
             else:
                 current_graphpath = (
                     self.graph_datapath.split(".pt")[0] + f"_frac{self.frac_index}.pt"
+                    if self.graph_datapath
+                    else None
                 )
             self.frac_index += 1
         if hasattr(self, "train_dataloader_instance"):
