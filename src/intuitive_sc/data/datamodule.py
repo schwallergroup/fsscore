@@ -193,25 +193,29 @@ class CustomDataModule(pl.LightningDataModule):
         return get_dataloader(
             self.smiles_test,
             self.target_test,
+            use_fp=self.use_fp,
             featurizer=self.featurizer,
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=self.num_workers,
             read_fn=self.read_fn,
-            graphset=True if self.graph_datapath else False,
-            graph_dataset=self.graph_dataset,
+            graph_datapath=self.graph_datapath,
+            use_geom=self.use_geom,
+            depth_edges=self.depth_edges,
         )
 
     def predict_dataloader(self) -> DataLoader:
         return get_dataloader(
             self.smiles_predict,
+            use_fp=self.use_fp,
             featurizer=self.featurizer,
             batch_size=self.batch_size,
             shuffle=False,
             num_workers=self.num_workers,
             read_fn=self.read_fn,
-            graphset=True if self.graph_datapath else False,
-            graph_dataset=self.graph_dataset,
+            graph_datapath=self.graph_datapath,
+            use_geom=self.use_geom,
+            depth_edges=self.depth_edges,
         )
 
     def teardown(self, stage: str) -> None:

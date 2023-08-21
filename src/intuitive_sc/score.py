@@ -143,6 +143,13 @@ if __name__ == "__main__":
         help="Number of workers for data loading",
         default=None,
     )
+    parser.add_argument(
+        "--mc_dropout_samples",
+        type=int,
+        help="Number of MC dropout samples",
+        default=1,
+    )
+
     args = parser.parse_args()
 
     torch.set_float32_matmul_precision("medium")
@@ -167,10 +174,16 @@ if __name__ == "__main__":
         verbose=args.verbose,
         batch_size=args.batch_size,
         graph_datapath=graph_datapath,
+        mc_dropout_samples=args.mc_dropout_samples,
     )
     LOGGER.info(f"Scoring {len(smiles)} SMILES")
-    scores = scorer.score(smiles=smiles)
-    df["score"] = scores
+    if args.mc_dropout_samples > 1:
+        scores_mean, scores_var = scorer.score(smiles=smiles)
+        df["score_mean"] = scores_mean
+        df["score_var"] = scores_var
+    else:
+        scores = scorer.score(smiles=smiles)
+        df["score"] = scores
 
     # save
     if args.save_filepath is None:
