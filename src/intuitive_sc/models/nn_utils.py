@@ -59,9 +59,10 @@ def get_new_model_and_trainer(
 
     ckpt = pl.callbacks.ModelCheckpoint(
         dirpath=os.path.join(save_dir, "checkpoints"),
-        filename="ranknet-{epoch:02d}-{val_loss:.2f}",
-        monitor="train/loss",
+        filename="ranknet-{epoch:02d}-best_val_loss",
+        monitor="val/loss",
         save_last=True,
+        mode="min",
     )
 
     data_loader_reloader = DataLoaderReloader(
