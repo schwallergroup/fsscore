@@ -3,6 +3,7 @@ Create a graph dataset class that inherits from torch_geometric.data.Dataset.
 Code adapted from LineEvo (https://github.com/fate1997/LineEvo/tree/main)
 """
 import copy
+import gc
 import os
 from collections import defaultdict
 from itertools import chain, combinations
@@ -123,6 +124,8 @@ class GraphDatasetMem(InMemoryDataset):
         self.pre_transform()
 
         data, slices = self.collate(self.data_list)
+        del self.data_list
+        gc.collect()
         torch.save((data, slices), self.processed_path)
 
     def pre_transform(self):
