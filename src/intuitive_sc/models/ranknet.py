@@ -221,6 +221,8 @@ class LitRankNet(pl.LightningModule):
         self.dropout_p = dropout_p
         self.mc_dropout_samples = mc_dropout_samples
         self.fp = fp
+        self.test_scores_i = []
+        self.test_scores_j = []
 
         self.save_hyperparameters(ignore="net")
 
@@ -312,6 +314,11 @@ class LitRankNet(pl.LightningModule):
         self.log(
             "test/regloss", reg_loss.item(), batch_size=score_i.size(0), sync_dist=True
         )
+        score_i = score_i.view(-1).cpu().detach().numpy()
+        score_j = score_j.view(-1).cpu().detach().numpy()
+        self.test_scores_i.extend(score_i)
+        self.test_scores_j.extend(score_j)
+
         return {metric_k: metric_val for metric_k, metric_val in metrics.items()}
 
     def predict_step(

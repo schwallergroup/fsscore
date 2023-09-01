@@ -64,4 +64,5 @@ lightning_logs
 data/raw
 data/processed
 data/testsets
+data/test
 results/*

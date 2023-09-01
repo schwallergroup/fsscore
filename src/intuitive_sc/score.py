@@ -179,11 +179,11 @@ if __name__ == "__main__":
     LOGGER.info(f"Scoring {len(smiles)} SMILES")
     if args.mc_dropout_samples > 1:
         scores_mean, scores_var = scorer.score(smiles=smiles)
-        df["score_mean"] = scores_mean
-        df["score_var"] = scores_var
+        df[f"{args.compound_col}_score_mean"] = scores_mean
+        df[f"{args.compound_col}_score_var"] = scores_var
     else:
         scores = scorer.score(smiles=smiles)
-        df["score"] = scores
+        df[f"{args.compound_col}_score"] = scores
 
     # save
     if args.save_filepath is None:

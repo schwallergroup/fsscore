@@ -120,7 +120,8 @@ class CustomDataModule(pl.LightningDataModule):
             raise NotImplementedError
 
         if stage == "test":
-            pass  # TODO create holdout set
+            self.smiles_test = self.smiles
+            self.target_test = self.target
 
         if stage == "predict":
             self.smiles_predict = self.smiles
