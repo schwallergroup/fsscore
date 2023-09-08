@@ -17,7 +17,7 @@ from intuitive_sc.data.featurizer import (
     get_featurizer,
 )
 from intuitive_sc.data.graph_dataset import GraphData, GraphDatasetMem
-from intuitive_sc.utils.logging import get_logger
+from intuitive_sc.utils.logging_utils import get_logger
 
 warnings.filterwarnings(
     "ignore", category=UserWarning, message="TypedStorage is deprecated"

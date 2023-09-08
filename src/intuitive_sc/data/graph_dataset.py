@@ -19,7 +19,7 @@ from torch_geometric.data.separate import separate
 from tqdm import tqdm
 
 from intuitive_sc.data.molgraph import NUM_NODE_FEATURES, MolGraph
-from intuitive_sc.utils.logging import get_logger
+from intuitive_sc.utils.logging_utils import get_logger
 
 LOGGER = get_logger(__name__)
 
@@ -31,7 +31,6 @@ class GraphData(Data):
         self.num_nodes = None
         self.num_bonds = None
         self.num_nodes_features = None
-        self.num_bonds_features = None
         self.evolve_edges = 0
         self.flat_index = None
 
@@ -106,9 +105,6 @@ class GraphDatasetMem(InMemoryDataset):
             # edge_attr
             if "edge_attr" in feature_dict.keys():
                 data.edge_attr = feature_dict["edge_attr"].clone().detach()
-                data.num_bonds_features = (
-                    data.edge_attr.shape[1] if data.edge_attr.shape[0] != 0 else 0
-                )
 
             data.x = feature_dict["x"].clone().detach()
 

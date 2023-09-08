@@ -9,7 +9,7 @@ from pytorch_lightning.loggers import WandbLogger
 
 from intuitive_sc.data.datamodule import CustomDataModule
 from intuitive_sc.models.ranknet import LitRankNet
-from intuitive_sc.utils.logging import get_logger
+from intuitive_sc.utils.logging_utils import get_logger
 from intuitive_sc.utils.paths import DATA_PATH, INPUT_TEST_PATH, MODEL_PATH
 
 LOGGER = get_logger(__name__)

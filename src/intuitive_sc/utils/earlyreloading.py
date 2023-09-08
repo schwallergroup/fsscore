@@ -1,7 +1,7 @@
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 
-from intuitive_sc.utils.logging import get_logger
+from intuitive_sc.utils.logging_utils import get_logger
 
 LOGGER = get_logger(__name__)
 

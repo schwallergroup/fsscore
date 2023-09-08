@@ -17,7 +17,7 @@ from intuitive_sc.data.featurizer import (
 )
 from intuitive_sc.models.gnn import AVAILABLE_GRAPH_ENCODERS
 from intuitive_sc.models.nn_utils import get_new_model_and_trainer
-from intuitive_sc.utils.logging import get_logger
+from intuitive_sc.utils.logging_utils import get_logger
 from intuitive_sc.utils.paths import DATA_PATH, INPUT_TRAIN_PATH, MODEL_PATH
 
 LOGGER = get_logger(__name__)
@@ -165,8 +165,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--compound_cols",
-        type=List[str],
+        type=str,
         default=["smiles_i", "smiles_j"],
+        nargs="*",
         help="Column names with SMILES for each comparison.",
     )
     parser.add_argument(

@@ -3,42 +3,11 @@ Code adapted from LineEvo: https://github.com/fate1997/LineEvo/tree/main
 """
 from typing import Tuple, Union
 
-import networkx as nx
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
 from torch_geometric.nn import global_add_pool, global_max_pool
-
-
-class LineEvo(nn.Module):
-    def __init__(
-        self,
-        dim: int = 128,
-        dropout: float = 0.0,
-        num_layers: int = 1,
-        if_pos: bool = False,
-    ) -> None:
-        super().__init__()
-        self.layers = nn.ModuleList()
-        for _ in range(num_layers):
-            self.layers.append(LineEvoLayer(dim, dropout, if_pos))
-
-    def forward(
-        self, x: torch.Tensor, edge_index, edge_attr, pos, batch: torch.Tensor
-    ) -> torch.Tensor:
-        edges = torch.as_tensor(
-            np.array(nx.from_edgelist(edge_index.T.tolist()).edges), device=x.device
-        )
-
-        mol_repr_all = 0
-        for layer in self.layers:
-            x, edges, edge_attr, pos, batch, mol_repr = layer(
-                x, edges, edge_attr, pos, batch
-            )
-            mol_repr_all = mol_repr_all + mol_repr
-
-        return mol_repr_all
 
 
 class LineEvoLayer(nn.Module):
@@ -216,6 +185,7 @@ class GATv2Layer(nn.Module):
                 + dst_projected.index_select(0, edge_dst_index)
             )
         )
+        # attention and softmax for normalization
         edge_attn = (self.double_attn * edge_attn).sum(-1)
         exp_edge_attn = (edge_attn - edge_attn.max()).exp()
 

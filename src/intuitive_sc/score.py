@@ -1,7 +1,7 @@
 import argparse
 import multiprocessing
 import os
-from typing import Callable, List, Optional
+from typing import Callable, List, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -12,7 +12,7 @@ from rdkit import Chem
 from intuitive_sc.data.datamodule import CustomDataModule
 from intuitive_sc.data.featurizer import AVAILABLE_FEATURIZERS, Featurizer
 from intuitive_sc.models.ranknet import LitRankNet
-from intuitive_sc.utils.logging import get_logger
+from intuitive_sc.utils.logging_utils import get_logger
 from intuitive_sc.utils.paths import DATA_PATH, RESULTS_PATH  # TODO default modelpath
 
 LOGGER = get_logger(__name__)
@@ -28,12 +28,14 @@ class Scorer:
         verbose: bool = False,
         batch_size: int = 32,
         graph_datapath: str = None,
+        dropout_p: float = 0.0,
     ) -> None:
         self.model = model
         self.featurizer = featurizer
         if num_workers is None:
             num_workers = multiprocessing.cpu_count() // 2
         self.num_workers = num_workers
+        self.model.dropout_p = dropout_p
         self.model.mc_dropout_samples = mc_dropout_samples
         self.batch_size = batch_size
         self.graph_datapath = None if self.model._hparams.fp else graph_datapath
@@ -54,7 +56,7 @@ class Scorer:
         self,
         smiles: List[str],
         read_fn: Callable = Chem.MolFromSmiles,
-    ) -> np.ndarray[float]:
+    ) -> Union[np.ndarray[float], Tuple[np.ndarray[float], np.ndarray[float]]]:
         """
         Scores a a list of SMILES string.
 
@@ -107,10 +109,11 @@ if __name__ == "__main__":
         required=True,
     )
     parser.add_argument(
-        "--compound_col",
+        "--compound_cols",
         type=str,
-        default="smiles",
-        help="Column name with SMILES to score",
+        default=["smiles"],
+        nargs="*",
+        help="Column names with SMILES for each comparison.",
     )
     parser.add_argument(
         "--save_filepath",
@@ -149,6 +152,18 @@ if __name__ == "__main__":
         help="Number of MC dropout samples",
         default=1,
     )
+    parser.add_argument(
+        "--dropout_p",
+        type=float,
+        help="Dropout probability",
+        default=0.0,
+    )
+    parser.add_argument(
+        "--graph_datapath",
+        type=str,
+        help="Path to the graph dataset",
+        default=None,
+    )
 
     args = parser.parse_args()
 
@@ -157,15 +172,28 @@ if __name__ == "__main__":
     # load data
     df = pd.read_csv(args.data_path)
     LOGGER.info(f"Loaded {len(df)} SMILES from {args.data_path}")
-    smiles = df[args.compound_col].tolist()
+    if len(args.compound_cols) == 1:
+        output = "score"
+        smiles = df[args.compound_cols[0]].tolist()
+    else:
+        output = "diff"
+        smiles = df[args.compound_cols].values.tolist()
+
+    if args.mc_dropout_samples > 1 and args.dropout_p == 0.0:
+        LOGGER.warning(
+            "MC dropout is enabled but dropout probability is 0.0. "
+            "This is not recommended."
+            "Changed dropout probability to 0.2."
+        )
+        args.dropout_p = 0.2
 
     # load model
     model = LitRankNet.load_from_checkpoint(
         args.model_path,
     )
-
     input_base = os.path.basename(args.data_path).split(".")[0]
-    graph_datapath = os.path.join(DATA_PATH, f"{input_base}_graphs_score.pt")
+    if args.graph_datapath is None and not model._hparams.fp:
+        args.graph_datapath = os.path.join(DATA_PATH, f"{input_base}_graphs_score.pt")
 
     # score
     scorer = Scorer(
@@ -173,23 +201,25 @@ if __name__ == "__main__":
         featurizer=args.featurizer,
         verbose=args.verbose,
         batch_size=args.batch_size,
-        graph_datapath=graph_datapath,
+        graph_datapath=args.graph_datapath,
         mc_dropout_samples=args.mc_dropout_samples,
+        num_workers=args.num_workers,
+        dropout_p=args.dropout_p,
     )
     LOGGER.info(f"Scoring {len(smiles)} SMILES")
     if args.mc_dropout_samples > 1:
         scores_mean, scores_var = scorer.score(smiles=smiles)
-        df[f"{args.compound_col}_score_mean"] = scores_mean
-        df[f"{args.compound_col}_score_var"] = scores_var
+        df[f"{args.compound_cols}_{output}_mean"] = scores_mean
+        df[f"{args.compound_cols}_{output}_var"] = scores_var
     else:
         scores = scorer.score(smiles=smiles)
-        df[f"{args.compound_col}_score"] = scores
+        df[f"{args.compound_cols}_score"] = scores
 
     # save
     if args.save_filepath is None:
         model_base = os.path.basename(os.path.dirname(os.path.dirname(args.model_path)))
         args.save_filepath = os.path.join(
-            RESULTS_PATH, f"{input_base}_{model_base}_scores.csv"
+            RESULTS_PATH, f"{input_base}_{model_base}_{output}.csv"
         )
 
     os.makedirs(os.path.dirname(args.save_filepath), exist_ok=True)

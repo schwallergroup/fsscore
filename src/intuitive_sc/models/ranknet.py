@@ -12,7 +12,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score
 from torch.optim import Adam
-from torch_geometric.data import Batch
 
 from intuitive_sc.data.graph_dataset import GraphData
 from intuitive_sc.models.gnn import AVAILABLE_GRAPH_ENCODERS
@@ -155,7 +154,7 @@ class RankNet(nn.Module):
         """Scores sample `x`
 
         Args:
-            x: input fingerprints // (n_samples, n_feat)
+            x: input fingerprints/graphs // (n_samples, n_feat)
         """
         with torch.inference_mode():
             return self.encoder(x)
@@ -344,19 +343,16 @@ class LitRankNet(pl.LightningModule):
             (np.ndarray): Mean predictions of the batch.
             (np.ndarray, optional): Uncertainty measured as variance of the predictions.
         """
-        if isinstance(new_batch, (Sequence)):
+        if isinstance(new_batch, Sequence):
             if isinstance(new_batch[0], Sequence):
+                # Tuple[Tuple[Tensor, Tensor], Tensor]
                 pred_fun = partial(self.net)
-            elif isinstance(new_batch[0], torch.Tensor):
-                pred_fun = self.net.score
+                new_batch = new_batch[0]
+            elif isinstance(new_batch[0], (torch.Tensor, GraphData)):
+                # Tuple[Tensor, Tensor]
+                pred_fun = self.net
             else:
                 raise _NOT_RECOGNISED_INPUT_TYPE
-            new_batch = new_batch[0]
-
-        elif isinstance(new_batch, Batch):
-            # TODO write option so that I can return difference of preds (two inputs)
-            pred_fun = self.net.score
-
         elif isinstance(new_batch, (torch.Tensor, GraphData)):
             pred_fun = self.net.score
         else:
@@ -376,11 +372,12 @@ class LitRankNet(pl.LightningModule):
 
         with torch.no_grad():
             for _ in range(self.mc_dropout_samples):
-                out = (
-                    pred_fun(*new_batch)
-                    if isinstance(new_batch, tuple)
-                    else pred_fun(new_batch)
-                )
+                if isinstance(new_batch, Sequence):
+                    x_i, x_j = new_batch
+                    out_all = pred_fun(x_i, x_j)
+                    out = out_all[-1]
+                else:
+                    out = pred_fun(new_batch)
                 dropout_out.append(out)
 
         dropout_out = torch.cat(dropout_out, dim=1)
