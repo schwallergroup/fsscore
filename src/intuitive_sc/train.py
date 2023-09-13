@@ -18,7 +18,7 @@ from intuitive_sc.data.featurizer import (
 from intuitive_sc.models.gnn import AVAILABLE_GRAPH_ENCODERS
 from intuitive_sc.models.nn_utils import get_new_model_and_trainer
 from intuitive_sc.utils.logging_utils import get_logger
-from intuitive_sc.utils.paths import DATA_PATH, INPUT_TRAIN_PATH, MODEL_PATH
+from intuitive_sc.utils.paths import INPUT_TRAIN_PATH, MODEL_PATH, PROCESSED_PATH
 
 LOGGER = get_logger(__name__)
 
@@ -26,7 +26,6 @@ LOGGER = get_logger(__name__)
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 
-# TODO add option to have different loss (so could also have hinge loss)
 def train(
     smiles: List[Tuple[str, str]],
     target: List[float],
@@ -260,11 +259,6 @@ if __name__ == "__main__":
         default=0.0,
     )
     parser.add_argument(
-        "--hinge_loss",
-        action="store_true",
-        help="Whether to use hinge loss",
-    )
-    parser.add_argument(
         "--subsample",
         type=int,
         help="Subsample the dataset (absolute number)",
@@ -354,13 +348,13 @@ if __name__ == "__main__":
         data_name = os.path.basename(args.data_path).split(".")[0]
         if args.subsample is not None:
             args.graph_datapath = os.path.join(
-                DATA_PATH,
+                PROCESSED_PATH,
                 f"{data_name}_sub{args.subsample}_seed{args.seed}_"
-                f"evodepth{depth_edges}_graphs.pt",
+                f"depth{depth_edges}_graphs.pt",
             )
         else:
             args.graph_datapath = os.path.join(
-                DATA_PATH, f"{data_name}_evodepth{depth_edges}_graphs.pt"
+                PROCESSED_PATH, f"{data_name}_depth{depth_edges}_graphs_train.pt"
             )
 
     train(
@@ -380,8 +374,6 @@ if __name__ == "__main__":
         num_workers=args.num_workers,
         mc_dropout_samples=args.mc_dropout_samples,
         dropout_p=args.dropout_p,
-        # TODO import class for hinge loss
-        loss_fn="hinge" if args.hinge_loss else F.binary_cross_entropy_with_logits,
         resume_training=args.resume_training,
         arrange_layers=args.arrange_layers,
         val_indices=val_indices if args.fixed_split else None,

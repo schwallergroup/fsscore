@@ -13,7 +13,9 @@ from intuitive_sc.data.datamodule import CustomDataModule
 from intuitive_sc.data.featurizer import AVAILABLE_FEATURIZERS, Featurizer
 from intuitive_sc.models.ranknet import LitRankNet
 from intuitive_sc.utils.logging_utils import get_logger
-from intuitive_sc.utils.paths import DATA_PATH, RESULTS_PATH  # TODO default modelpath
+from intuitive_sc.utils.paths import PROCESSED_PATH, RESULTS_PATH
+
+# TODO default modelpath
 
 LOGGER = get_logger(__name__)
 
@@ -173,10 +175,10 @@ if __name__ == "__main__":
     df = pd.read_csv(args.data_path)
     LOGGER.info(f"Loaded {len(df)} SMILES from {args.data_path}")
     if len(args.compound_cols) == 1:
-        output = "score"
+        output = f"{args.compound_cols[0]}_score"
         smiles = df[args.compound_cols[0]].tolist()
     else:
-        output = "diff"
+        output = f"{args.compound_cols[0]}_{args.compound_cols[1]}_diff"
         smiles = df[args.compound_cols].values.tolist()
 
     if args.mc_dropout_samples > 1 and args.dropout_p == 0.0:
@@ -193,7 +195,9 @@ if __name__ == "__main__":
     )
     input_base = os.path.basename(args.data_path).split(".")[0]
     if args.graph_datapath is None and not model._hparams.fp:
-        args.graph_datapath = os.path.join(DATA_PATH, f"{input_base}_graphs_score.pt")
+        args.graph_datapath = os.path.join(
+            PROCESSED_PATH, f"{input_base}_graphs_score.pt"
+        )
 
     # score
     scorer = Scorer(
@@ -209,11 +213,11 @@ if __name__ == "__main__":
     LOGGER.info(f"Scoring {len(smiles)} SMILES")
     if args.mc_dropout_samples > 1:
         scores_mean, scores_var = scorer.score(smiles=smiles)
-        df[f"{args.compound_cols}_{output}_mean"] = scores_mean
-        df[f"{args.compound_cols}_{output}_var"] = scores_var
+        df[f"{output}_mean"] = scores_mean
+        df[f"{output}_var"] = scores_var
     else:
         scores = scorer.score(smiles=smiles)
-        df[f"{args.compound_cols}_score"] = scores
+        df[f"{args.compound_cols[0]}_score"] = scores
 
     # save
     if args.save_filepath is None:

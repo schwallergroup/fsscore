@@ -10,7 +10,7 @@ from pytorch_lightning.loggers import WandbLogger
 from intuitive_sc.data.datamodule import CustomDataModule
 from intuitive_sc.models.ranknet import LitRankNet
 from intuitive_sc.utils.logging_utils import get_logger
-from intuitive_sc.utils.paths import DATA_PATH, INPUT_TEST_PATH, MODEL_PATH
+from intuitive_sc.utils.paths import INPUT_TEST_PATH, MODEL_PATH, PROCESSED_PATH
 
 LOGGER = get_logger(__name__)
 
@@ -91,10 +91,10 @@ if __name__ == "__main__":
     if model._hparams.arrange[-1] != "L":
         depth_edges += 1
 
+    filename = os.path.basename(args.data_path).split(".")[0]
     if args.graph_datapath is None and not model._hparams.fp:
-        filename = os.path.basename(args.data_path).split(".")[0]
         graph_datapath = os.path.join(
-            DATA_PATH, "test", f"{filename}_graphs_depth{depth_edges}.pt"
+            PROCESSED_PATH, f"{filename}_graphs_test_depth{depth_edges}.pt"
         )
 
     dm = CustomDataModule(
@@ -139,7 +139,7 @@ if __name__ == "__main__":
     df_scored.to_csv(
         os.path.join(
             os.path.dirname(os.path.dirname(args.model_path)),
-            f"filename_{os.path.basename(args.model_path).split('.')[0]}_scored.csv",
+            f"{filename}_{os.path.basename(args.model_path).split('.')[0]}_scored.csv",
         ),
         index=False,
     )
