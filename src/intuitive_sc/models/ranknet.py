@@ -276,24 +276,45 @@ class LitRankNet(pl.LightningModule):
         return loss + reg_loss
 
     def validation_step(
-        self, val_batch: BatchPairTarget, batch_idx: int
+        self, val_batch: BatchPairTarget, batch_idx: int, dataloader_idx: int = 0
     ) -> torch.Tensor:
-        (score_i, score_j, logit), target = self.get_scores_logit_target(val_batch)
-        loss = self.loss_fn(logit, target)
-        reg_loss = self.get_reg_loss(score_i, score_j, self.regularization_factor)
+        if dataloader_idx == 0:
+            (score_i, score_j, logit), target = self.get_scores_logit_target(val_batch)
+            loss = self.loss_fn(logit, target)
+            reg_loss = self.get_reg_loss(score_i, score_j, self.regularization_factor)
 
-        metrics = compute_metrics(logit, target, loss, target_prob=self.target_prob)
-        for metric_k, metric_val in metrics.items():
+            metrics = compute_metrics(logit, target, loss, target_prob=self.target_prob)
+            for metric_k, metric_val in metrics.items():
+                self.log(
+                    f"val/{metric_k}",
+                    metric_val,
+                    batch_size=score_i.size(0),
+                    sync_dist=True,
+                    add_dataloader_idx=False,
+                )
             self.log(
-                f"val/{metric_k}",
-                metric_val,
+                "val/regloss",
+                reg_loss.item(),
                 batch_size=score_i.size(0),
                 sync_dist=True,
+                add_dataloader_idx=False,
             )
-        self.log(
-            "val/regloss", reg_loss.item(), batch_size=score_i.size(0), sync_dist=True
-        )
-        return loss + reg_loss
+            return loss + reg_loss
+        elif dataloader_idx == 1:
+            (score_i, score_j, logit), target = self.get_scores_logit_target(val_batch)
+            loss = self.loss_fn(logit, target)
+            metrics = compute_metrics(logit, target, loss, target_prob=self.target_prob)
+            for metric_k, metric_val in metrics.items():
+                self.log(
+                    f"val2/{metric_k}",
+                    metric_val,
+                    batch_size=score_i.size(0),
+                    sync_dist=True,
+                    add_dataloader_idx=False,
+                )
+            reg_loss = self.get_reg_loss(score_i, score_j, self.regularization_factor)
+
+            return loss + reg_loss
 
     def test_step(
         self, test_batch: BatchPairTarget, batch_idx: int = 0

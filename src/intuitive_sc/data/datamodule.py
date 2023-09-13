@@ -34,6 +34,8 @@ class CustomDataModule(pl.LightningDataModule):
         read_fn: Callable = Chem.MolFromSmiles,
         num_fracs: int = 1,
         cl_indices: List[List[int]] = None,
+        smiles_val_add: List[Tuple[str, str]] = None,
+        target_val_add: List[float] = None,
     ) -> None:
         super().__init__()
         self.smiles = smiles
@@ -54,6 +56,8 @@ class CustomDataModule(pl.LightningDataModule):
         self.dim = 2048 if self.use_fp else NUM_NODE_FEATURES  # TODO hard coded
         self.val_dataloader_instance = None
         self.cl_indices = cl_indices
+        self.smiles_val_add = smiles_val_add
+        self.target_val_add = target_val_add
 
     def setup(self, stage: str) -> None:
         """
@@ -116,8 +120,22 @@ class CustomDataModule(pl.LightningDataModule):
                 self.target_train = [self.target_train]
 
         if stage == "fit" and not self.random_split:
-            # TODO implement version of sequential learning here
-            raise NotImplementedError
+            self.smiles_val = [self.smiles[i] for i in self.val_indices]
+            self.target_val = [self.target[i] for i in self.val_indices]
+            self.smiles_train = [
+                [
+                    self.smiles[i]
+                    for i in range(len(self.smiles))
+                    if i not in self.val_indices
+                ]
+            ]
+            self.target_train = [
+                [
+                    self.target[i]
+                    for i in range(len(self.target))
+                    if i not in self.val_indices
+                ]
+            ]
 
         if stage == "test":
             self.smiles_test = self.smiles
@@ -188,7 +206,28 @@ class CustomDataModule(pl.LightningDataModule):
                 use_geom=self.use_geom,
                 depth_edges=self.depth_edges,
             )
-        return self.val_dataloader_instance
+        if self.smiles_val_add:
+            LOGGER.info("Adding additional validation data.")
+            add_graphpath = (
+                self.graph_datapath.split(".pt")[0] + "_second_valset.pt"
+                if self.graph_datapath
+                else None
+            )
+            dataloader_add = get_dataloader(
+                self.smiles_val_add,
+                self.target_val_add,
+                use_fp=self.use_fp,
+                featurizer=self.featurizer,
+                batch_size=self.batch_size,
+                num_workers=self.num_workers,
+                read_fn=self.read_fn,
+                graph_datapath=add_graphpath,
+                use_geom=self.use_geom,
+                depth_edges=self.depth_edges,
+            )
+            return [self.val_dataloader_instance, dataloader_add]
+        else:
+            return self.val_dataloader_instance
 
     def test_dataloader(self) -> DataLoader:
         return get_dataloader(

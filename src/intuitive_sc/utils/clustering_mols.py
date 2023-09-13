@@ -3,8 +3,9 @@ Script to cluster molecules based on their fingerprints in order to
 pair them up for fine-tuning.
 """
 import argparse
+import multiprocessing
 import os
-from itertools import combinations
+import random
 from typing import List
 
 import numpy as np
@@ -31,14 +32,16 @@ class ClusterMols:
         k_clusters: int = 10,
         dissim_cutoff: float = 0.2,
         cluster_method: str = "kmeans",
+        buffer: float = None,
     ) -> None:
         self.smiles = smiles
         self.labels = labels
         self.k_clusters = k_clusters
         self.dissim_cutoff = dissim_cutoff
         self.cluster_method = cluster_method
-        self.mols = [Chem.MolFromSmiles(smi) for smi in smiles]
-        self.fp = self.get_fingerprints(self.mols)
+        self.buffer = buffer
+        mols = [Chem.MolFromSmiles(smi) for smi in smiles]
+        self.fp = self.get_fingerprints(mols)
         if cluster_method == "kmeans":
             LOGGER.info("Clustering molecules using k-means.")
             self.dists = self.tanimoto_dist_mat2()
@@ -82,23 +85,40 @@ class ClusterMols:
             range(1, len(self.fp)), desc="Calculating distances", total=len(self.fp)
         ):
             sims = DataStructs.BulkTanimotoSimilarity(self.fp[i], self.fp[:i])
-            dist_mat.extend([1 - x for x in sims])
+            dist_mat.extend(np.array([1 - x for x in sims], dtype=np.float16))
         return dist_mat
+
+    def calculate_dissimilarity(self, i):
+        sims = DataStructs.BulkTanimotoSimilarity(self.fp[i], self.fp[:])
+        return np.array([1 - x for x in sims], dtype=np.float16)
 
     def tanimoto_dist_mat2(
         self,
     ) -> np.ndarray:
         n = len(self.fp)
-        pairwise_dissimilarity = np.zeros((n, n))
-        for i, j in tqdm(
-            combinations(range(n), 2),
-            desc="Calculating distances",
-            total=n * (n - 1) // 2,
-        ):
-            pairwise_dissimilarity[i, j] = 1 - DataStructs.TanimotoSimilarity(
-                self.fp[i], self.fp[j]
+        dissim = (
+            np.array(
+                [
+                    1 - x
+                    for x in DataStructs.BulkTanimotoSimilarity(self.fp[i], self.fp[:])
+                ],
+                dtype=np.float16,
             )
-            pairwise_dissimilarity[j, i] = pairwise_dissimilarity[i, j]
+            for i in tqdm(range(n), desc="Calculating distances", total=n)
+        )
+        dissim = np.array(list(dissim), dtype=np.float16)
+        return dissim
+
+    def tanimoto_dist_mat2_parallel(
+        self,
+    ) -> np.ndarray:
+        pairwise_dissimilarity = Parallel(n_jobs=multiprocessing.cpu_count() // 4)(
+            delayed(self.calculate_dissimilarity)(i)
+            for i in tqdm(
+                range(len(self.fp)), desc="Calculating distances", total=len(self.fp)
+            )
+        )
+
         return pairwise_dissimilarity
 
     def optimize_clustering(
@@ -134,14 +154,14 @@ class ClusterMols:
     ) -> List[tuple]:
         if self.cluster_method == "kmeans":
             if len(self.smiles) > 500:
-                cluster_params = range(2, 30)
+                cluster_params = range(5, 30)
             else:
-                cluster_params = range(2, 10)
+                cluster_params = range(3, 10)
         elif self.cluster_method == "butina":
             cluster_params = np.arange(0.1, 1, 0.1)
         else:
             raise ValueError("Invalid cluster method.")
-        all_scores = Parallel(n_jobs=-1)(
+        all_scores = Parallel(n_jobs=multiprocessing.cpu_count() // 2)(
             delayed(self.get_score_combined)(param)
             for param in tqdm(cluster_params, desc="Optimizing clustering")
         )
@@ -249,9 +269,20 @@ class ClusterMols:
                 if cluster_i != cluster_j:
                     for i in cluster_dict[cluster_i]:
                         for j in cluster_dict[cluster_j]:
-                            if self.labels:
+                            if self.labels and not self.buffer:
                                 if (
                                     self.labels[i] != self.labels[j]
+                                    and i not in mols_added
+                                    and j not in mols_added
+                                ):
+                                    pairs.append((i, j))
+                                    mols_added.append(i)
+                                    mols_added.append(j)
+                            elif self.labels and self.buffer:
+                                # pairing based on continuous labels
+                                # TODO check
+                                if (
+                                    abs(self.labels[i] - self.labels[j]) >= self.buffer
                                     and i not in mols_added
                                     and j not in mols_added
                                 ):
@@ -264,6 +295,30 @@ class ClusterMols:
                                     mols_added.append(i)
                                     mols_added.append(j)
         return pairs
+
+
+def randomize_cols(row):
+    LOGGER.info("Position of columns randomized.")
+    if random.random() < 0.5:
+        return (
+            row["smiles_i"],
+            row["smiles_j"],
+            row["label_i"],
+            row["label_j"],
+            row["target"],
+        )
+    else:
+        if row["target"] == 0:
+            new_target = 1
+        elif row["target"] == 1:
+            new_target = 0
+        return (
+            row["smiles_j"],
+            row["smiles_i"],
+            row["label_j"],
+            row["label_i"],
+            new_target,
+        )
 
 
 if __name__ == "__main__":
@@ -307,7 +362,8 @@ if __name__ == "__main__":
         "--complex_label",
         type=str,
         default=None,
-        help="Name of the label for the more complex molecules.",
+        help="Name of the label for the more complex molecules. \
+            Options: specific label or high/low for continuous labels.",
     )
     parser.add_argument(
         "--use_labels",
@@ -325,11 +381,16 @@ if __name__ == "__main__":
         default=None,
         help="Path to save pairs.",
     )
+    parser.add_argument(
+        "--buffer",
+        type=float,
+        default=None,
+        help="Buffer to use for pairing based on continuous labels.",
+    )
 
     args = parser.parse_args()
 
     df = pd.read_csv(args.data_path)
-    df = df[df["source"] == "CP"]
 
     smiles = df[args.smi_col].tolist()
     if args.use_labels:
@@ -345,6 +406,7 @@ if __name__ == "__main__":
         k_clusters=args.k_clusters,
         dissim_cutoff=args.dissim_cutoff,
         cluster_method=args.cluster_method,
+        buffer=args.buffer,
     )
 
     # TODO include option to do simple pairing? (when dataset size veery small)
@@ -378,10 +440,25 @@ if __name__ == "__main__":
             }
         )
         if args.complex_label:
-            # assuming that also kinda random already
-            df_pairs["target"] = df_pairs.apply(
-                lambda row: 1 if args.complex_label == row["label_j"] else 0, axis=1
-            )
+            if args.buffer:
+                if args.complex_label == "high":
+                    # 1 if label_j bigger than label_i
+                    df_pairs["target"] = df_pairs.apply(
+                        lambda row: 1 if row["label_j"] > row["label_i"] else 0, axis=1
+                    )
+                elif args.complex_label == "low":
+                    # 1 if label_j smaller than label_i
+                    df_pairs["target"] = df_pairs.apply(
+                        lambda row: 1 if row["label_j"] < row["label_i"] else 0, axis=1
+                    )
+                else:
+                    raise ValueError("Invalid complex label.")
+            else:
+                df_pairs["target"] = df_pairs.apply(
+                    lambda row: 1 if args.complex_label == row["label_j"] else 0, axis=1
+                )
+            # randomize order of pairs in columns
+            df_pairs = df_pairs.apply(randomize_cols, axis=1, result_type="broadcast")
 
     else:
         df_pairs = pd.DataFrame(
@@ -394,6 +471,6 @@ if __name__ == "__main__":
     if args.output_path is None:
         base_input_path = os.path.basename(args.data_path)
         args.output_path = os.path.join(
-            DATA_PATH, f'{base_input_path.split(".")[0]}_CP_k{cluster_param}_pairs.csv'
+            DATA_PATH, f'{base_input_path.split(".")[0]}_k{cluster_param}_pairs.csv'
         )
     df_pairs.to_csv(args.output_path, index=False)
