@@ -61,7 +61,8 @@ class TrackImprovementToPretain(pl.Callback):
             new_auroc = None
 
         self.logger.log_metrics({"val/acc_improvement": new_acc - self.acc})
-        self.logger.log_metrics({"val/auc_improvement": new_auroc - self.auroc})
+        if new_auroc is not None and self.auroc is not None:
+            self.logger.log_metrics({"val/auc_improvement": new_auroc - self.auroc})
 
     def _petrained_metrics(self) -> None:
         graph_datapath = os.path.join(DATA_PATH, "ft_improv_val.pt")
