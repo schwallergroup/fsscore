@@ -219,6 +219,8 @@ if __name__ == "__main__":
         scores = scorer.score(smiles=smiles)
         df[f"{args.compound_cols[0]}_score"] = scores
 
+    # TODO sort based on MC dropout var if do the whole thing
+
     # save
     if args.save_filepath is None:
         model_base = os.path.basename(os.path.dirname(os.path.dirname(args.model_path)))

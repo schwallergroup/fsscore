@@ -52,7 +52,7 @@ def get_new_model_and_trainer(
 
     # wandb logger
     logger = WandbLogger(
-        name="ranknet",
+        name="train",
         project="intuitive-sc",
         save_dir=save_dir,
     )

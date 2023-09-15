@@ -185,7 +185,10 @@ class CustomDataModule(pl.LightningDataModule):
         if self.smiles_val is None:
             LOGGER.info("No validation set. Trains on full dataset (for production).")
             return None
-        val_frac = int(self.val_size * 100)
+        if self.val_size < 1:
+            val_frac = int(self.val_size * 100)
+        else:
+            val_frac = int(self.val_size / len(self.smiles) * 100)
         current_graphpath = (
             self.graph_datapath.split(".pt")[0]
             + f"_val{val_frac}_seed{pl.seed_everything()}.pt"

@@ -3,8 +3,9 @@ Fine-tuning the model
 """
 import argparse
 import os
+import shutil
 from datetime import date
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 import finetuning_scheduler as fts
 import pandas as pd
@@ -18,6 +19,7 @@ from sklearn.model_selection import train_test_split
 from intuitive_sc.data.datamodule import CustomDataModule
 from intuitive_sc.data.featurizer import AVAILABLE_FEATURIZERS
 from intuitive_sc.models.ranknet import LitRankNet
+from intuitive_sc.utils.earlystop_ft import EarlyStoppingFT
 from intuitive_sc.utils.logging_utils import get_logger
 from intuitive_sc.utils.paths import (
     DATA_PATH,
@@ -111,13 +113,16 @@ def finetune(
     n_epochs: int = 10,
     num_workers: Optional[int] = None,
     val_indices: Optional[List[int]] = None,
-    val_size: float = 0.2,
+    val_size: Union[float, int] = 0.2,
     log_every: int = 10,
     lr: float = 3e-4,
     track_improvement: bool = False,
     smiles_val_add: List[Tuple[str, str]] = None,
     target_val_add: List[float] = None,
     ft_schedule_yaml: str = None,
+    earlystopping: bool = True,
+    patience: int = 2,
+    stopping_threshold: float = 0.9,
 ) -> None:
     """
     Fine-tunes the model
@@ -131,6 +136,12 @@ def finetune(
         save_dir=save_dir,
     )
 
+    if graph_datapath is None:
+        filename = os.path.basename(args.data_path).split(".")[0]
+        graph_datapath = os.path.join(
+            PROCESSED_PATH, f"temp_{logger.version}", f"{filename}_ft.pt"
+        )
+
     # load model
     model = LitRankNet.load_from_checkpoint(
         model_path,
@@ -142,6 +153,8 @@ def finetune(
         depth_edges += 1
 
     if val_indices is None and val_size > 0:
+        if val_size > 1:
+            val_size = int(val_size)
         (
             smiles_train,
             smiles_val,
@@ -154,7 +167,7 @@ def finetune(
             target,
             list(range(len(smiles))),
             test_size=val_size,
-            shuffle=False,
+            shuffle=True,
         )
         monitor = "val/loss"
     elif val_indices is not None:
@@ -203,17 +216,18 @@ def finetune(
     }
     ckpt = pl.callbacks.ModelCheckpoint(**ckpt_kwargs)
 
-    # earlystop = EarlyStoppingFT(
-    #     monitor_ft="val/loss",
-    #     monitor_pt="val2/loss",  # Do I have that?
-    #     mode="min",
-    #     patience=3,
-    #     check_on_train_epoch_end=False,
-    # )
+    earlystop = EarlyStoppingFT(
+        monitor_ft=monitor,
+        monitor_pt="val2/acc",
+        mode="min",
+        stopping_threshold=stopping_threshold,  # for pre-training acc
+        patience=patience,  # only for finetuning loss
+        check_on_train_epoch_end=False,
+    )
 
     # TODO max_depth (how many fts phases to do) as args
     # FIXME no error msg but FTS not working yet
-    earlystopping_kwargs = {"monitor": monitor, "patience": 2}
+    earlystopping_kwargs = {"monitor": monitor, "patience": patience}
     fts_sched = fts.FinetuningScheduler(ft_schedule=ft_schedule_yaml, max_depth=-1)
     fts_early_stopping = fts.FTSEarlyStopping(**earlystopping_kwargs)
     fts_ckpt = fts.FTSCheckpoint(**ckpt_kwargs)
@@ -222,6 +236,7 @@ def finetune(
         ([ckpt] if not ft_schedule_yaml else [])
         + ([track_improvement] if track_improvement else [])
         + ([fts_sched, fts_early_stopping, fts_ckpt] if ft_schedule_yaml else [])
+        + ([earlystop] if earlystopping else [])
     )
 
     # fine-tuning scheduler
@@ -241,6 +256,11 @@ def finetune(
         model,
         dm,
     )
+
+    # delete all folder with temp_{run_id} in PROCESSED_PATH
+    for folder in os.listdir(PROCESSED_PATH):
+        if folder.startswith(f"temp_{logger.version}"):
+            shutil.rmtree(os.path.join(PROCESSED_PATH, folder))
 
 
 if __name__ == "__main__":
@@ -331,7 +351,7 @@ if __name__ == "__main__":
         "--val_size",
         type=float,
         help="Validation fraction for random split",
-        default=0.0,
+        default=0.2,
     )
     parser.add_argument(
         "--n_epochs",
@@ -370,6 +390,24 @@ if __name__ == "__main__":
         # TODO add default in paths.py
         default=None,
     )
+    parser.add_argument(
+        "--earlystopping",
+        action="store_true",
+        help="Whether to use early stopping.",
+        default=False,
+    )
+    parser.add_argument(
+        "--patience",
+        type=int,
+        help="Patience for early stopping.",
+        default=2,
+    )
+    parser.add_argument(
+        "--stopping_threshold",
+        type=float,
+        help="Stopping threshold for early stopping.",
+        default=0.9,
+    )
 
     args = parser.parse_args()
 
@@ -385,10 +423,10 @@ if __name__ == "__main__":
     smiles_pairs = df[args.compound_cols].values.tolist()
     target = df[args.rating_col].values.tolist()
 
-    if args.graph_datapath is None:
-        filename = os.path.basename(args.data_path).split(".")[0]
-        args.graph_datapath = os.path.join(PROCESSED_PATH, f"{filename}_graphs_ft.pt")
-
+    if args.earlystopping:
+        LOGGER.info("Using early stopping.")
+        args.track_pretest = True
+        args.ft_schedule_yaml = None
     if args.track_improvement:
         LOGGER.info("Tracking improvement to pre-trained model.")
     if args.track_pretest:
@@ -414,4 +452,8 @@ if __name__ == "__main__":
         smiles_val_add=smiles_test if args.track_pretest else None,
         target_val_add=target_test if args.track_pretest else None,
         ft_schedule_yaml=args.ft_schedule_yaml,
+        earlystopping=args.earlystopping,
+        patience=args.patience,
+        stopping_threshold=args.stopping_threshold,
+        val_size=args.val_size,
     )

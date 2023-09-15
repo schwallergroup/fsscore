@@ -75,7 +75,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     wandb_logger = WandbLogger(
-        name="ranknet",
+        name="test",
         project="intuitive-sc",
         save_dir=os.path.dirname(os.path.dirname(args.model_path)),
     )
