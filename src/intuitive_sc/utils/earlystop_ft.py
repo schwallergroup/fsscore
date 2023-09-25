@@ -1,5 +1,6 @@
-from typing import Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
+import numpy as np
 import pytorch_lightning as pl
 import torch
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
@@ -16,24 +17,55 @@ class EarlyStoppingFT(EarlyStopping):
         self,
         monitor_ft: str,
         monitor_pt: str,
-        mode: str = "min",
-        stopping_threshold: Optional[float] = None,
-        divergence_threshold: Optional[float] = None,
+        mode_ft: str = "min",
+        mode_pt: str = "max",
         *args,
         **kwargs,
     ):
-        super().__init__(monitor=monitor_ft, *args, **kwargs)
+        super().__init__(monitor=monitor_ft, mode=mode_ft, *args, **kwargs)
         self.monitor_ft = monitor_ft
         self.monitor_pt = monitor_pt
-        self.mode = mode
-        self.stopping_threshold = stopping_threshold
-        self.divergence_threshold = divergence_threshold
+        self.mode_ft = mode_ft
+        self.mode_pt = mode_pt
+        self.wait_count_ft = 0
+        self.wait_count_pt = 0
+        torch_inf = torch.tensor(np.Inf)
+        self.best_score_ft = torch_inf if self.monitor_op_ft == torch.lt else -torch_inf
+        self.best_score_pt = torch_inf if self.monitor_op_pt == torch.lt else -torch_inf
+
+        self.min_delta *= 1 if self.monitor_op_pt == torch.gt else -1
 
     @property
     def state_key(self) -> str:
         return self._generate_state_key(
-            monitor_ft=self.monitor_ft, monitor_pt=self.monitor_pt, mode=self.mode
+            monitor_ft=self.monitor_ft, monitor_pt=self.monitor_pt, mode=self.mode_ft
         )
+
+    @property
+    def monitor_op_ft(self) -> Callable:
+        return self.mode_dict[self.mode_ft]
+
+    @property
+    def monitor_op_pt(self) -> Callable:
+        return self.mode_dict[self.mode_pt]
+
+    def state_dict(self) -> Dict[str, Any]:
+        return {
+            "wait_count_ft": self.wait_count_ft,
+            "wait_count_pt": self.wait_count_pt,
+            "stopped_epoch": self.stopped_epoch,
+            "best_score_ft": self.best_score_ft,
+            "best_score_pt": self.best_score_pt,
+            "patience": self.patience,
+        }
+
+    def load_state_dict(self, state_dict: Dict[str, Any]) -> None:
+        self.wait_count_ft = state_dict["wait_count_ft"]
+        self.wait_count_pt = state_dict["wait_count_pt"]
+        self.stopped_epoch = state_dict["stopped_epoch"]
+        self.best_score_ft = state_dict["best_score_ft"]
+        self.best_score_pt = state_dict["best_score_pt"]
+        self.patience = state_dict["patience"]
 
     def on_validation_end(
         self, trainer: pl.Trainer, pl_module: pl.LightningModule
@@ -65,11 +97,33 @@ class EarlyStoppingFT(EarlyStopping):
         current_ft = logs[self.monitor_ft].squeeze()
         current_pt = logs[self.monitor_pt].squeeze()
 
-        should_stop_ft, reason_ft = self._evaluate_stopping_criteria_custom(
-            current_ft, self.monitor_ft
+        (
+            should_stop_ft,
+            reason_ft,
+            self.wait_count_ft,
+            self.best_score_ft,
+        ) = self._evaluate_stopping_criteria_custom(
+            current_ft,
+            self.monitor_ft,
+            self.best_score_ft,
+            self.wait_count_ft,
+            min_delta=0.0,
+            monitor_op=self.monitor_op_ft,
+            mode=self.mode_ft,
         )
-        should_stop_pt, reason_pt = self._evaluate_stopping_criteria_custom(
-            current_pt, self.monitor_pt, self.stopping_threshold
+        (
+            should_stop_pt,
+            reason_pt,
+            self.wait_count_pt,
+            self.best_score_pt,
+        ) = self._evaluate_stopping_criteria_custom(
+            current_pt,
+            self.monitor_pt,
+            self.best_score_pt,
+            self.wait_count_pt,
+            min_delta=self.min_delta,
+            monitor_op=self.monitor_op_pt,
+            mode=self.mode_pt,
         )
 
         should_stop = should_stop_ft or should_stop_pt
@@ -91,7 +145,11 @@ class EarlyStoppingFT(EarlyStopping):
         self,
         current: Tensor,
         monitor: str,
-        stopping_threshold: Optional[float] = None,
+        best_score: Tensor,
+        wait_count: int,
+        min_delta: float,
+        monitor_op: Callable,
+        mode: str,
     ) -> Tuple[bool, Optional[str]]:
         should_stop = False
         reason = None
@@ -99,58 +157,56 @@ class EarlyStoppingFT(EarlyStopping):
             should_stop = True
             reason = (
                 f"Monitored metric {monitor} = {current} is not finite."
-                f" Previous best value was {self.best_score:.3f}."
+                f" Previous best value was {best_score:.3f}."
                 " Signaling Trainer to stop."
             )
-        elif stopping_threshold is not None and self.monitor_op(
-            current, stopping_threshold
+        elif self.stopping_threshold is not None and monitor_op(
+            current, self.stopping_threshold
         ):
             should_stop = True
             reason = (
                 "Stopping threshold reached:"
-                f" {monitor} = {current} {self.order_dict[self.mode]}"
-                f"{stopping_threshold}."
+                f" {monitor} = {current} {self.order_dict[mode]}"
+                f"{self.stopping_threshold}."
                 " Signaling Trainer to stop."
             )
-        elif self.divergence_threshold is not None and self.monitor_op(
+        elif self.divergence_threshold is not None and monitor_op(
             -current, -self.divergence_threshold
         ):
             should_stop = True
             reason = (
                 "Divergence threshold reached:"
-                f" {monitor} = {current} {self.order_dict[self.mode]} \
+                f" {monitor} = {current} {self.order_dict[mode]} \
                     {self.divergence_threshold}."
                 " Signaling Trainer to stop."
             )
-        elif self.monitor_op(
-            current - self.min_delta, self.best_score.to(current.device)
-        ):
+        elif monitor_op(current - min_delta, best_score.to(current.device)):
             should_stop = False
-            reason = self._improvement_message(current, monitor)
-            self.best_score = current
-            self.wait_count = 0
+            reason = self._improvement_message(current, monitor, min_delta, best_score)
+            best_score = current
+            wait_count = 0
         else:
-            # patience only for ft val loss
-            if stopping_threshold is None:
-                self.wait_count += 1
-                if self.wait_count >= self.patience:
-                    should_stop = True
-                    reason = (
-                        f"Monitored metric {monitor} did not improve"
-                        f" in the last {self.wait_count} records."
-                        f" Best score: {self.best_score:.3f}."
-                        " Signaling Trainer to stop."
-                    )
+            wait_count += 1
+            if wait_count >= self.patience:
+                should_stop = True
+                reason = (
+                    f"Monitored metric {monitor} did not improve"
+                    f" in the last {wait_count} records."
+                    f" Best score: {best_score:.3f}."
+                    " Signaling Trainer to stop."
+                )
 
-        return should_stop, reason
+        return should_stop, reason, wait_count, best_score
 
-    def _improvement_message(self, current: Tensor, monitor: str) -> str:
+    def _improvement_message(
+        self, current: Tensor, monitor: str, min_delta: float, best_score: Tensor
+    ) -> str:
         """Formats a log message that informs the user about \
             an improvement in the monitored score."""
-        if torch.isfinite(self.best_score):
+        if torch.isfinite(best_score):
             msg = (
-                f"Metric {monitor} improved by {abs(self.best_score - current):.3f} >="
-                f" min_delta = {abs(self.min_delta)}. New best score: {current:.3f}"
+                f"Metric {monitor} improved by {abs(best_score - current):.3f} >="
+                f" min_delta = {abs(min_delta)}. New best score: {current:.3f}"
             )
         else:
             msg = f"Metric {monitor} improved. New best score: {current:.3f}"

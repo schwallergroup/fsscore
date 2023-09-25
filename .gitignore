@@ -67,3 +67,4 @@ data/testsets
 data/test
 data/finetuning
 results/*
+streamlit_app/__pycache__

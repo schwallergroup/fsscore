@@ -1,8 +1,10 @@
 import argparse
 import os
 from datetime import date
+from glob import glob
 from typing import Callable, List, Optional, Tuple
 
+import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
 import torch
@@ -17,6 +19,7 @@ from intuitive_sc.data.featurizer import (
 )
 from intuitive_sc.models.gnn import AVAILABLE_GRAPH_ENCODERS
 from intuitive_sc.models.nn_utils import get_new_model_and_trainer
+from intuitive_sc.models.ranknet import LitRankNet
 from intuitive_sc.utils.logging_utils import get_logger
 from intuitive_sc.utils.paths import INPUT_TRAIN_PATH, MODEL_PATH, PROCESSED_PATH
 
@@ -110,6 +113,11 @@ def train(
         cl_indices=cl_indices,
     )
 
+    if val_size > 0:
+        use_val = 1.0
+    else:
+        use_val = 0.0
+
     # get model and trainer
     model, trainer = get_new_model_and_trainer(
         save_dir=save_dir,
@@ -127,6 +135,7 @@ def train(
         arrange=arrange_layers,
         reload_interval=reload_interval,
         early_reloading=early_reloading,
+        use_val=use_val,
     )
 
     # access last checkpoint
@@ -142,6 +151,57 @@ def train(
         dm,
         ckpt_path=model_ckpt,
     )
+
+    # get scores for scaling
+    best_ckpt = trainer.checkpoint_callback.best_model_path
+
+    # load model
+    model_best = LitRankNet.load_from_checkpoint(
+        best_ckpt,
+    )
+
+    if cl_indices is not None:
+        train_graphfiles = glob(dm.graph_datapath.split(".")[0] + "_cl", "*.pt")
+        # sort by fraction
+        train_graphfiles = sorted(
+            train_graphfiles, key=lambda x: int(x.split("_cl")[-1].split(".")[0])
+        )
+    elif reload_interval > 0:
+        train_graphfiles = glob(dm.graph_datapath.split(".")[0] + "_frac" + "*.pt")
+        # sort by fraction
+        train_graphfiles = sorted(
+            train_graphfiles, key=lambda x: int(x.split("frac")[-1].split(".")[0])
+        )
+    else:
+        train_graphfiles = [dm.graph_datapath]
+
+    all_scores = []
+    for idx, graphfile in enumerate(train_graphfiles):
+        current_smiles = dm.smiles_train[idx]
+        current_smiles_flat = [item for sublist in current_smiles for item in sublist]
+        dm_scaling = CustomDataModule(
+            smiles=current_smiles_flat,
+            featurizer=featurizer,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            read_fn=read_fn,
+            use_fp=use_fp,
+            use_geom=use_geom,
+            graph_datapath=graphfile,
+            depth_edges=depth_edges,
+        )
+
+        scores = trainer.predict(model_best, dm_scaling)
+        scores = torch.cat(scores).numpy()
+        all_scores.append(scores)
+    all_scores = np.concatenate(all_scores)
+    max_score = np.max(all_scores)
+    min_score = np.min(all_scores)
+
+    model_best.update_min_max_values(min_score, max_score)
+
+    # resave model
+    trainer.save_checkpoint(best_ckpt)
 
 
 if __name__ == "__main__":

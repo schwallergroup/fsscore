@@ -6,6 +6,7 @@ import argparse
 import multiprocessing
 import os
 import random
+from itertools import combinations
 from typing import List
 
 import numpy as np
@@ -238,6 +239,10 @@ class ClusterMols:
                     pairs.append((i, j))
         return pairs
 
+    from itertools import combinations
+
+    import numpy as np
+
     def create_unique_pairs(
         self,
         clusters: List[int],
@@ -252,6 +257,9 @@ class ClusterMols:
         Returns:
         List[Tuple]: A list of pairs of molecules
         """
+        # Convert clusters to a numpy array
+        clusters = np.array(clusters)
+
         # Create a dictionary mapping clusters to molecules
         # keys: cluster index, values: list of mol indices in cluster
         cluster_dict = {}
@@ -262,38 +270,39 @@ class ClusterMols:
 
         # Create a list of pairs of molecules with different labels
         pairs = []
-        mols_added = []
+        mols_added = set()
         for cluster_i in cluster_dict:
             # iterate through all remaining clusters
             for cluster_j in cluster_dict:
                 if cluster_i != cluster_j:
-                    for i in cluster_dict[cluster_i]:
-                        for j in cluster_dict[cluster_j]:
-                            if self.labels and not self.buffer:
-                                if (
-                                    self.labels[i] != self.labels[j]
-                                    and i not in mols_added
-                                    and j not in mols_added
-                                ):
-                                    pairs.append((i, j))
-                                    mols_added.append(i)
-                                    mols_added.append(j)
-                            elif self.labels and self.buffer:
-                                # pairing based on continuous labels
-                                # TODO check
-                                if (
-                                    abs(self.labels[i] - self.labels[j]) >= self.buffer
-                                    and i not in mols_added
-                                    and j not in mols_added
-                                ):
-                                    pairs.append((i, j))
-                                    mols_added.append(i)
-                                    mols_added.append(j)
-                            else:
-                                if i not in mols_added and j not in mols_added:
-                                    pairs.append((i, j))
-                                    mols_added.append(i)
-                                    mols_added.append(j)
+                    # Generate all possible pairs of molecules
+                    mol_pairs = combinations(
+                        cluster_dict[cluster_i] + cluster_dict[cluster_j], 2
+                    )
+                    for i, j in mol_pairs:
+                        if self.labels and not self.buffer:
+                            if (
+                                self.labels[i] != self.labels[j]
+                                and i not in mols_added
+                                and j not in mols_added
+                            ):
+                                pairs.append((i, j))
+                                mols_added.add(i)
+                                mols_added.add(j)
+                        elif self.labels and self.buffer:
+                            if (
+                                abs(self.labels[i] - self.labels[j]) >= self.buffer
+                                and i not in mols_added
+                                and j not in mols_added
+                            ):
+                                pairs.append((i, j))
+                                mols_added.add(i)
+                                mols_added.add(j)
+                        else:
+                            if i not in mols_added and j not in mols_added:
+                                pairs.append((i, j))
+                                mols_added.add(i)
+                                mols_added.add(j)
         return pairs
 
 

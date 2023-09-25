@@ -13,6 +13,7 @@ import pandas as pd
 # https://github.com/speediedan/finetuning-scheduler/blob/main/README.md#installation-using-the-standalone-pytorch-lightning-package
 import pytorch_lightning as pl
 import torch
+from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from sklearn.model_selection import train_test_split
 
@@ -122,8 +123,8 @@ def finetune(
     target_val_add: List[float] = None,
     ft_schedule_yaml: str = None,
     earlystopping: bool = True,
-    patience: int = 2,
-    stopping_threshold: float = 0.9,
+    patience: int = 3,
+    datapoints: int = None,
 ) -> None:
     """
     Fine-tunes the model
@@ -135,6 +136,7 @@ def finetune(
         name="finetuning",
         project="intuitive-sc",
         save_dir=save_dir,
+        tags=[str(datapoints)],
     )
 
     if graph_datapath is None:
@@ -171,13 +173,19 @@ def finetune(
             shuffle=True,
         )
         monitor = "val/loss"
+        val_batches = 1
     elif val_indices is not None:
         val_size = len(val_indices) / len(smiles)
         smiles_val = [smiles[i] for i in val_indices]
         target_val = [target[i] for i in val_indices]
         monitor = "val/loss"
+        val_batches = 1
     else:
         monitor = "train/loss"
+        if earlystopping:
+            val_batches = 1
+        else:
+            val_batches = 0
 
     # load data
     dm = CustomDataModule(
@@ -198,14 +206,15 @@ def finetune(
     )
 
     # callback to track improvement to pre-trained model
-    track_improvement = TrackImprovementToPretain(
-        model,
-        depth_edges,
-        graph_datapath,
-        logger,
-        smiles_val,
-        target_val,
-    )
+    if track_improvement:
+        track_improvement = TrackImprovementToPretain(
+            model,
+            depth_edges,
+            graph_datapath,
+            logger,
+            smiles_val,
+            target_val,
+        )
 
     # checkpoint callback
     ckpt_kwargs = {
@@ -215,15 +224,17 @@ def finetune(
         "dirpath": os.path.join(save_dir, "checkpoints", f"run_{logger.version}"),
         "filename": "ft_ranknet-{epoch:02d}-best" + f"_{monitor.split('/')[0]}_loss",
     }
-    ckpt = pl.callbacks.ModelCheckpoint(**ckpt_kwargs)
+    ckpt = ModelCheckpoint(**ckpt_kwargs)
 
     earlystop = EarlyStoppingFT(
         monitor_ft=monitor,
-        monitor_pt="val2/acc",
-        mode="min",
-        stopping_threshold=stopping_threshold,  # for pre-training acc
+        # both metrics below are based on pretraining test data
+        monitor_pt="val2/acc" if val_size > 0 else "val/acc",
+        mode_ft="min",
+        mode_pt="max",
         patience=patience,  # only for finetuning loss
         check_on_train_epoch_end=False,
+        min_delta=0.02,  # only applies to pre-training metric
     )
 
     # TODO max_depth (how many fts phases to do) as args
@@ -251,6 +262,7 @@ def finetune(
         logger=logger,
         callbacks=callbacks,
         num_sanity_val_steps=0,
+        limit_val_batches=val_batches,
     )
 
     trainer.fit(
@@ -269,8 +281,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data_path",
         type=str,
-        help="Path to the csv file. Must contain columns 'smiles_i', 'smiles_j'\
-            and 'target'",
+        help="Path to the csv file.",
         default=None,
         required=True,
     )
@@ -351,7 +362,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--val_size",
         type=float,
-        help="Validation fraction for random split",
+        help="Validation fraction (float) or size (int) for random split",
         default=0.2,
     )
     parser.add_argument(
@@ -401,13 +412,7 @@ if __name__ == "__main__":
         "--patience",
         type=int,
         help="Patience for early stopping.",
-        default=2,
-    )
-    parser.add_argument(
-        "--stopping_threshold",
-        type=float,
-        help="Stopping threshold for early stopping.",
-        default=0.9,
+        default=3,
     )
 
     args = parser.parse_args()
@@ -421,6 +426,8 @@ if __name__ == "__main__":
     df = pd.read_csv(args.data_path)
     if args.datapoints is not None:
         df = df.iloc[: args.datapoints]
+    else:
+        args.datapoints = len(df)
     smiles_pairs = df[args.compound_cols].values.tolist()
     target = df[args.rating_col].values.tolist()
 
@@ -428,8 +435,13 @@ if __name__ == "__main__":
         LOGGER.info("Using early stopping.")
         args.track_pretest = True
         args.ft_schedule_yaml = None
-    if args.track_improvement:
+    if args.track_improvement and args.val_size > 0:
         LOGGER.info("Tracking improvement to pre-trained model.")
+    elif args.track_improvement and args.val_size == 0:
+        LOGGER.warning(
+            "Cannot track improvement to pre-trained model with 0 validation size."
+        )
+        args.track_improvement = False
     if args.track_pretest:
         LOGGER.info("Tracking performance on pre-training test set.")
         df_test = pd.read_csv(INPUT_TEST_PATH)
@@ -455,6 +467,6 @@ if __name__ == "__main__":
         ft_schedule_yaml=args.ft_schedule_yaml,
         earlystopping=args.earlystopping,
         patience=args.patience,
-        stopping_threshold=args.stopping_threshold,
         val_size=args.val_size,
+        datapoints=args.datapoints,
     )

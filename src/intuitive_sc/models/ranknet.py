@@ -3,7 +3,7 @@ Implementation of the ranking algorithm RankNet adapted from molskill
 github repo: https://github.com/microsoft/molskill
 """
 from functools import partial
-from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pytorch_lightning as pl
@@ -222,6 +222,8 @@ class LitRankNet(pl.LightningModule):
         self.fp = fp
         self.test_scores_i = []
         self.test_scores_j = []
+        self.max_value = None
+        self.min_value = None
 
         self.save_hyperparameters(ignore="net")
 
@@ -418,6 +420,23 @@ class LitRankNet(pl.LightningModule):
     def configure_optimizers(self):
         opt = Adam(self.net.parameters(), lr=self.lr)
         return opt
+
+    def update_min_max_values(self, min, max):
+        # save values to model after training
+        self.min_value = min
+        self.max_value = max
+
+    def on_save_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
+        checkpoint["min_value"] = self.min_value
+        checkpoint["max_value"] = self.max_value
+
+    def on_load_checkpoint(self, checkpoint: Dict[str, Any]) -> None:
+        if "min_value" in checkpoint and "max_value" in checkpoint:
+            self.min_value = checkpoint["min_value"]
+            self.max_value = checkpoint["max_value"]
+        else:
+            self.min_value = None
+            self.max_value = None
 
 
 def enable_dropout(model: RankNet, dropout_p: float = 0.0):

@@ -1,6 +1,7 @@
 import argparse
 import multiprocessing
 import os
+import shutil
 from typing import Callable, List, Optional, Tuple, Union
 
 import numpy as np
@@ -31,6 +32,7 @@ class Scorer:
         batch_size: int = 32,
         graph_datapath: str = None,
         dropout_p: float = 0.0,
+        keep_graphs: bool = False,
     ) -> None:
         self.model = model
         self.featurizer = featurizer
@@ -40,6 +42,7 @@ class Scorer:
         self.model.dropout_p = dropout_p
         self.model.mc_dropout_samples = mc_dropout_samples
         self.batch_size = batch_size
+        self.keep_graphs = keep_graphs
         self.graph_datapath = None if self.model._hparams.fp else graph_datapath
         self.depth_edges = self.model._hparams.arrange.count("L") - 1
         if self.model._hparams.arrange[-1] != "L":
@@ -83,6 +86,14 @@ class Scorer:
 
         preds = self.trainer.predict(self.model, dm)
 
+        if not self.keep_graphs and not self.model._hparams.fp:
+            os.remove(self.graph_datapath)
+            # remove the processed folder even if not empty
+            processed_dir = os.path.join(
+                os.path.dirname(self.graph_datapath), "processed"
+            )
+            shutil.rmtree(processed_dir)
+
         if self.model.mc_dropout_samples > 1:
             scores_mean, scores_var = [pred[0] for pred in preds], [
                 pred[1] for pred in preds
@@ -90,6 +101,13 @@ class Scorer:
             return torch.cat(scores_mean).numpy(), torch.cat(scores_var).numpy()
         else:
             return torch.cat(preds).numpy()
+
+
+def reverse_sigmoid(x, low, high, k=1) -> float:
+    try:
+        return 1 / (1 + 10 ** (k * (x - (high + low) / 2) * 10 / (high - low)))
+    except OverflowError:
+        return 0
 
 
 if __name__ == "__main__":
@@ -166,6 +184,12 @@ if __name__ == "__main__":
         help="Path to the graph dataset",
         default=None,
     )
+    parser.add_argument(
+        "--keep_graphs",
+        action="store_true",
+        help="Whether to keep the graph dataset after scoring",
+        default=False,
+    )
 
     args = parser.parse_args()
 
@@ -209,17 +233,41 @@ if __name__ == "__main__":
         mc_dropout_samples=args.mc_dropout_samples,
         num_workers=args.num_workers,
         dropout_p=args.dropout_p,
+        keep_graphs=args.keep_graphs,
     )
     LOGGER.info(f"Scoring {len(smiles)} SMILES")
+
+    # split into subsets (hacky solution to the slowing down of dataloader)
+    if len(smiles) > 100000 and not model._hparams.fp:
+        LOGGER.info("Splitting into subsets")
+        smiles_sub = np.array_split(smiles, len(smiles) // 100000)
+    else:
+        smiles_sub = [smiles]
+
     if args.mc_dropout_samples > 1:
-        scores_mean, scores_var = scorer.score(smiles=smiles)
+        all_scores_mean, all_scores_var = [], []
+        for sub in smiles_sub:
+            scores_mean_sub, scores_var_sub = scorer.score(smiles=sub)
+            all_scores_mean.append(scores_mean_sub)
+            all_scores_var.append(scores_var_sub)
+        scores_mean, scores_var = (
+            np.concatenate(all_scores_mean),
+            np.concatenate(all_scores_var),
+        )
         df[f"{output}_mean"] = scores_mean
         df[f"{output}_var"] = scores_var
     else:
-        scores = scorer.score(smiles=smiles)
+        all_scores = []
+        for sub in smiles_sub:
+            scores_sub = scorer.score(smiles=sub)
+            all_scores.append(scores_sub)
+        scores = np.concatenate(all_scores)
         df[f"{args.compound_cols[0]}_score"] = scores
 
-    # TODO sort based on MC dropout var if do the whole thing
+        # # scale to [0,1] with sigmoid
+        # if model.max_value is not None and model.min_value is not None:
+        #     scores_scaled = reverse_sigmoid(scores, model.min_value, model.max_value)
+        #     df[f"{args.compound_cols[0]}_score_scaled"] = scores_scaled
 
     # save
     if args.save_filepath is None:
@@ -231,3 +279,11 @@ if __name__ == "__main__":
     os.makedirs(os.path.dirname(args.save_filepath), exist_ok=True)
     LOGGER.info(f"Saving scores to {args.save_filepath}")
     df.to_csv(args.save_filepath, index=False)
+
+    if args.mc_dropout_samples > 1:
+        # sort by variance
+        df = df.sort_values(by=[f"{output}_var"], ascending=False)
+        # save sorted
+        filepath_sorted = f'{args.save_filepath.split(".")[0]}_sorted.csv'
+        LOGGER.info(f"Saving sorted scores to {filepath_sorted}")
+        df.to_csv(filepath_sorted, index=False)

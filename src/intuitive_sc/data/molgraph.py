@@ -127,11 +127,11 @@ class MolGraph(abc.ABC):
         in_ring = 1 if atom.IsInRing() else 0
         is_aromatic = 1 if atom.GetIsAromatic() else 0
         hybrid_one_hot = one_hot_encoding(atom.GetHybridization(), HYBRIDIZATIONS)
+        chiral_tag_one_hot = one_hot_encoding("not_chiral", CHIRAL_TAGS)
         for center in self.chiral_centers:
             if center[0] == atom.GetIdx():
                 chiral_tag_one_hot = one_hot_encoding(center[1], CHIRAL_TAGS)
                 break
-        chiral_tag_one_hot = one_hot_encoding("not_chiral", CHIRAL_TAGS)
 
         return np.concatenate(
             [

@@ -26,6 +26,7 @@ def get_new_model_and_trainer(
     arrange: str = "GGLGGL",
     reload_interval: int = 0,
     early_reloading: bool = False,
+    use_val: float = 1.0,
 ) -> Tuple[LitRankNet, pl.Trainer]:
     """
     Creates a new RankNet model and trainer.
@@ -108,6 +109,8 @@ def get_new_model_and_trainer(
         deterministic=False,  # some components cannot be deterministic
         profiler="simple",
         reload_dataloaders_every_n_epochs=reload_interval if not early_reloading else 0,
+        num_sanity_val_steps=0,
+        limit_val_batches=use_val,
     )
 
     return model, trainer

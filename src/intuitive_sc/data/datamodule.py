@@ -58,6 +58,7 @@ class CustomDataModule(pl.LightningDataModule):
         self.cl_indices = cl_indices
         self.smiles_val_add = smiles_val_add
         self.target_val_add = target_val_add
+        self.smiles_val = None
 
     def setup(self, stage: str) -> None:
         """
@@ -65,7 +66,7 @@ class CustomDataModule(pl.LightningDataModule):
         This process is run on all workers and is called before training.
         Beware of memory issues when using multiple workers.
         """
-        if stage == "fit" and self.random_split:
+        if stage == "fit" and self.random_split and self.val_size > 0:
             if self.cl_indices is not None:
                 cl_indices_flat = [i for indices in self.cl_indices for i in indices]
             else:
@@ -120,6 +121,8 @@ class CustomDataModule(pl.LightningDataModule):
                 self.target_train = [self.target_train]
 
         if stage == "fit" and not self.random_split:
+            if self.val_indices is None:
+                raise ValueError("val_indices must be specified if random_split=False.")
             self.smiles_val = [self.smiles[i] for i in self.val_indices]
             self.target_val = [self.target[i] for i in self.val_indices]
             self.smiles_train = [
@@ -136,6 +139,11 @@ class CustomDataModule(pl.LightningDataModule):
                     if i not in self.val_indices
                 ]
             ]
+
+        if stage == "fit" and self.val_size == 0:
+            LOGGER.info("No validation set. Trains on full dataset (for production).")
+            self.smiles_train = [self.smiles]
+            self.target_train = [self.target]
 
         if stage == "test":
             self.smiles_test = self.smiles
@@ -182,7 +190,7 @@ class CustomDataModule(pl.LightningDataModule):
         return self.train_dataloader_instance
 
     def val_dataloader(self) -> DataLoader:
-        if self.smiles_val is None:
+        if self.smiles_val is None and self.smiles_val_add is None:
             LOGGER.info("No validation set. Trains on full dataset (for production).")
             return None
         if self.val_size < 1:
@@ -195,7 +203,7 @@ class CustomDataModule(pl.LightningDataModule):
             if self.graph_datapath
             else None
         )
-        if self.val_dataloader_instance is None:
+        if self.val_dataloader_instance is None and self.val_size > 0:
             # don't want to reload val (only train) when activating reload_dataloaders
             self.val_dataloader_instance = get_dataloader(
                 self.smiles_val,
@@ -221,14 +229,17 @@ class CustomDataModule(pl.LightningDataModule):
                 self.target_val_add,
                 use_fp=self.use_fp,
                 featurizer=self.featurizer,
-                batch_size=self.batch_size,
+                batch_size=128,  # allows a more accurate calc even if FT on small ds
                 num_workers=self.num_workers,
                 read_fn=self.read_fn,
                 graph_datapath=add_graphpath,
                 use_geom=self.use_geom,
                 depth_edges=self.depth_edges,
             )
-            return [self.val_dataloader_instance, dataloader_add]
+            if self.val_size > 0:
+                return [self.val_dataloader_instance, dataloader_add]
+            else:
+                return dataloader_add
         else:
             return self.val_dataloader_instance
 

@@ -9,9 +9,9 @@ RESULTS_PATH = os.path.join(ROOT_PATH, "results")
 PROCESSED_PATH = os.path.join(DATA_PATH, "processed")
 BEST_MODEL_PATH = os.path.join(
     MODEL_PATH,
-    "combo_train_graph_ep25x10_2023-08-25",
+    "combo_train_graph_GGLGGL_ep25x10_2023-09-16",
     "checkpoints",
-    "ranknet-epoch=243-best_val_loss.ckpt",
+    "ranknet-epoch=242-best_val_loss.ckpt",
 )
 # TODO add default model checkpoint path
 
