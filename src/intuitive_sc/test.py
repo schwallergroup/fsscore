@@ -72,6 +72,12 @@ if __name__ == "__main__":
         default="target",
         help="Column name with the target rating label",
     )
+    parser.add_argument(
+        "--output_path",
+        type=str,
+        default=None,
+        help="Path to save the scored data",
+    )
     args = parser.parse_args()
 
     wandb_logger = WandbLogger(
@@ -136,12 +142,12 @@ if __name__ == "__main__":
         }
     )
 
-    df_scored.to_csv(
-        os.path.join(
-            os.path.dirname(os.path.dirname(args.model_path)),
+    if args.output_path is None:
+        args.output_path = os.path.join(
+            os.path.dirname(args.model_path),
             f"{filename}_{os.path.basename(args.model_path).split('.')[0]}_scored.csv",
-        ),
-        index=False,
-    )
+        )
+
+    df_scored.to_csv(args.output_path, index=False)
 
     LOGGER.info("Done")
