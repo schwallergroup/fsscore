@@ -68,3 +68,5 @@ data/test
 data/finetuning
 results/*
 streamlit_app/__pycache__
+data/evaluate_scores.ipynb
+data/*
