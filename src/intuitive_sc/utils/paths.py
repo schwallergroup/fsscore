@@ -7,9 +7,9 @@ DATA_PATH = os.path.join(ROOT_PATH, "data")
 MODEL_PATH = os.path.join(ROOT_PATH, "models")
 RESULTS_PATH = os.path.join(ROOT_PATH, "results")
 PROCESSED_PATH = os.path.join(DATA_PATH, "processed")
-BEST_MODEL_PATH = os.path.join(
+PRETRAIN_MODEL_PATH = os.path.join(
     MODEL_PATH,
-    "pretrain_graph_GGLGGL_ep242_best_valloss",
+    "pretrain_graph_GGLGGL_ep242_best_valloss.ckpt",
 )
 
 INPUT_TRAIN_PATH = os.path.join(DATA_PATH, "uspto_cjhif_combo_train_reorder.csv")

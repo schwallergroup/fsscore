@@ -10,7 +10,7 @@ import rdkit
 from rdkit.Chem import AllChem, DataStructs
 
 from intuitive_sc.data.graph_dataset import GraphData, GraphDatasetMem
-from intuitive_sc.data.molgraph import MolGraph
+from intuitive_sc.data.molgraph import NUM_NODE_FEATURES, MolGraph
 
 
 class Featurizer(abc.ABC):
@@ -28,10 +28,6 @@ class Featurizer(abc.ABC):
 
     def dim(self) -> int:
         """Size of the returned feature"""
-        raise NotImplementedError()
-
-    def get_name(self) -> str:
-        """Name of the featurizer"""
         raise NotImplementedError()
 
 
@@ -142,7 +138,10 @@ class Graph2DFeaturizer(GraphFeaturizer):
 
     def dim(self) -> int:
         """Size of the returned feature"""
-        return self.graph_dataset.node_dim
+        if self.graph_dataset is not None:
+            return self.graph_dataset.node_dim
+        else:
+            return NUM_NODE_FEATURES
 
 
 @register_featurizer(name="graph_3D")
@@ -175,7 +174,10 @@ class Graph3DFeaturizer(GraphFeaturizer):
 
     def dim(self) -> int:
         """Size of the returned feature"""
-        return self.graph_dataset.node_dim
+        if self.graph_dataset is not None:
+            return self.graph_dataset.node_dim
+        else:
+            return NUM_NODE_FEATURES
 
 
 def get_featurizer(featurizer_name: str, **kwargs) -> Featurizer:

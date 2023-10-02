@@ -14,9 +14,7 @@ from intuitive_sc.data.datamodule import CustomDataModule
 from intuitive_sc.data.featurizer import AVAILABLE_FEATURIZERS, Featurizer
 from intuitive_sc.models.ranknet import LitRankNet
 from intuitive_sc.utils.logging_utils import get_logger
-from intuitive_sc.utils.paths import PROCESSED_PATH, RESULTS_PATH
-
-# TODO default modelpath
+from intuitive_sc.utils.paths import PRETRAIN_MODEL_PATH, PROCESSED_PATH, RESULTS_PATH
 
 LOGGER = get_logger(__name__)
 
@@ -116,11 +114,10 @@ if __name__ == "__main__":
         prog="intuitive_sc score",
     )
     parser.add_argument(
-        # TODO add a default path (import from paths)
         "--model_path",
         type=str,
         help="Path to the model checkpoint",
-        required=True,
+        default=PRETRAIN_MODEL_PATH,
     )
     parser.add_argument(
         "--data_path",

@@ -2,12 +2,12 @@ import pytest
 
 from intuitive_sc.models.ranknet import LitRankNet
 from intuitive_sc.score import Scorer
-from intuitive_sc.utils.paths import BEST_MODEL_PATH
+from intuitive_sc.utils.paths import PRETRAIN_MODEL_PATH
 
 
 @pytest.fixture(scope="module")
 def scorer():
-    model = LitRankNet.load_from_checkpoint(BEST_MODEL_PATH)
+    model = LitRankNet.load_from_checkpoint(PRETRAIN_MODEL_PATH)
     scorer = Scorer(model=model, featurizer="graph_2D")
     return scorer
 
