@@ -251,7 +251,7 @@ if __name__ == "__main__":
         "--graph_encoder",
         choices=list(AVAILABLE_GRAPH_ENCODERS.keys()),
         help="Name of the graph encoder to use",
-        default="GCN",
+        default="GNN",
     )
     parser.add_argument(
         "--use_fp",

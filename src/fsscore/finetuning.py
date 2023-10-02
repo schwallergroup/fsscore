@@ -22,7 +22,13 @@ from fsscore.data.featurizer import AVAILABLE_FEATURIZERS
 from fsscore.models.ranknet import LitRankNet
 from fsscore.utils.earlystop_ft import EarlyStoppingFT
 from fsscore.utils.logging_utils import get_logger
-from fsscore.utils.paths import DATA_PATH, INPUT_TEST_PATH, MODEL_PATH, PROCESSED_PATH
+from fsscore.utils.paths import (
+    DATA_PATH,
+    INPUT_TEST_PATH,
+    MODEL_PATH,
+    PRETRAIN_MODEL_PATH,
+    PROCESSED_PATH,
+)
 
 LOGGER = get_logger(__name__)
 
@@ -287,11 +293,10 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
-        # TODO add a default path (import from paths)
         "--model_path",
         type=str,
         help="Path to the pre-trained model checkpoint",
-        required=True,
+        default=PRETRAIN_MODEL_PATH,
     )
     parser.add_argument(
         "--compound_cols",
