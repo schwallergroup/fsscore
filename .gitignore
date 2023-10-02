@@ -57,13 +57,8 @@ MANIFEST
 data_dev/*
 playground.ipynb
 scscore/*
-data/combo
-data/raw_uspto
-data/*.pt
-models/*/*
+data/*
+models/*
 lightning_logs
-data/processed
-data/testsets
-data/finetuning
 results/*
 streamlit_app/__pycache__
