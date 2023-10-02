@@ -54,19 +54,16 @@ MANIFEST
 .python-version
 
 # Extras
+data_dev/*
 playground.ipynb
-scscore/models/example_model
+scscore/*
 data/combo
 data/raw_uspto
 data/*.pt
-models/*
+models/*/*
 lightning_logs
-data/raw
 data/processed
 data/testsets
-data/test
 data/finetuning
 results/*
 streamlit_app/__pycache__
-data/evaluate_scores.ipynb
-data/*
