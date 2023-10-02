@@ -12,7 +12,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from scipy.sparse import coo_matrix
 
-from intuitive_sc.utils.conversions import one_hot_encoding
+from fsscore.utils.conversions import one_hot_encoding
 
 # TODO adapt
 ATOM_TYPES = ["H", "B", "C", "N", "O", "F", "Si", "P", "S", "Cl", "Br", "I", "Se"]

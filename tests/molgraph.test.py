@@ -2,7 +2,7 @@ import unittest
 
 from rdkit import Chem
 
-from intuitive_sc.data.molgraph import MolGraph
+from fsscore.data.molgraph import MolGraph
 
 
 class TestMolGraph(unittest.TestCase):

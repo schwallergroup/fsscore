@@ -7,7 +7,7 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.utilities.rank_zero import rank_zero_warn
 from torch import Tensor
 
-from intuitive_sc.utils.logging_utils import get_logger
+from fsscore.utils.logging_utils import get_logger
 
 LOGGER = get_logger(__name__)
 

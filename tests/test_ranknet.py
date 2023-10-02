@@ -2,7 +2,7 @@ import pytorch_lightning as pl
 import torch
 import torch.nn as nn
 
-from intuitive_sc.models.ranknet import LitRankNet, RankNet
+from fsscore.models.ranknet import LitRankNet, RankNet
 
 
 def test_ranknet():

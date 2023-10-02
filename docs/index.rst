@@ -1,8 +1,8 @@
 ============
-intuitive-sc
+fsscore
 ============
 
-This is the documentation of **intuitive-sc**.
+This is the documentation of **fsscore**.
 
 .. note::
 

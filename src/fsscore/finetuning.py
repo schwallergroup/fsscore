@@ -17,17 +17,12 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 from sklearn.model_selection import train_test_split
 
-from intuitive_sc.data.datamodule import CustomDataModule
-from intuitive_sc.data.featurizer import AVAILABLE_FEATURIZERS
-from intuitive_sc.models.ranknet import LitRankNet
-from intuitive_sc.utils.earlystop_ft import EarlyStoppingFT
-from intuitive_sc.utils.logging_utils import get_logger
-from intuitive_sc.utils.paths import (
-    DATA_PATH,
-    INPUT_TEST_PATH,
-    MODEL_PATH,
-    PROCESSED_PATH,
-)
+from fsscore.data.datamodule import CustomDataModule
+from fsscore.data.featurizer import AVAILABLE_FEATURIZERS
+from fsscore.models.ranknet import LitRankNet
+from fsscore.utils.earlystop_ft import EarlyStoppingFT
+from fsscore.utils.logging_utils import get_logger
+from fsscore.utils.paths import DATA_PATH, INPUT_TEST_PATH, MODEL_PATH, PROCESSED_PATH
 
 LOGGER = get_logger(__name__)
 
@@ -134,7 +129,7 @@ def finetune(
     # wandb logger
     logger = WandbLogger(
         name="finetuning",
-        project="intuitive-sc",
+        project="fsscore",
         save_dir=save_dir,
         tags=[str(datapoints)],
     )

@@ -1,7 +1,7 @@
 import os
 import unittest
 
-from intuitive_sc.models.nn_utils import get_new_model_and_trainer
+from fsscore.models.nn_utils import get_new_model_and_trainer
 
 
 class TestGetNewModelAndTrainer(unittest.TestCase):

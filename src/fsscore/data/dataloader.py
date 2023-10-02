@@ -10,14 +10,14 @@ from rdkit import Chem
 from torch.utils.data import DataLoader, Dataset
 from torch_geometric.loader import DataLoader as GraphDataLoader
 
-from intuitive_sc.data.featurizer import (
+from fsscore.data.featurizer import (
     Featurizer,
     FingerprintFeaturizer,
     GraphFeaturizer,
     get_featurizer,
 )
-from intuitive_sc.data.graph_dataset import GraphData, GraphDatasetMem
-from intuitive_sc.utils.logging_utils import get_logger
+from fsscore.data.graph_dataset import GraphData, GraphDatasetMem
+from fsscore.utils.logging_utils import get_logger
 
 warnings.filterwarnings(
     "ignore", category=UserWarning, message="TypedStorage is deprecated"

@@ -1,6 +1,6 @@
 import torch
 
-from intuitive_sc.models.gnn_readouts import GATv2Layer, LineEvoLayer
+from fsscore.models.gnn_readouts import GATv2Layer, LineEvoLayer
 
 
 # Test case 1

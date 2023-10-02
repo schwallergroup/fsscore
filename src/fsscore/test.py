@@ -7,10 +7,10 @@ import pandas as pd
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 
-from intuitive_sc.data.datamodule import CustomDataModule
-from intuitive_sc.models.ranknet import LitRankNet
-from intuitive_sc.utils.logging_utils import get_logger
-from intuitive_sc.utils.paths import INPUT_TEST_PATH, MODEL_PATH, PROCESSED_PATH
+from fsscore.data.datamodule import CustomDataModule
+from fsscore.models.ranknet import LitRankNet
+from fsscore.utils.logging_utils import get_logger
+from fsscore.utils.paths import INPUT_TEST_PATH, MODEL_PATH, PROCESSED_PATH
 
 LOGGER = get_logger(__name__)
 
@@ -82,7 +82,7 @@ if __name__ == "__main__":
 
     wandb_logger = WandbLogger(
         name="test",
-        project="intuitive-sc",
+        project="fsscore",
         save_dir=os.path.dirname(os.path.dirname(args.model_path)),
     )
 

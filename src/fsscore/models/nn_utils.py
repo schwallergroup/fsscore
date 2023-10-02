@@ -6,8 +6,8 @@ import torch
 import torch.nn.functional as F
 from pytorch_lightning.loggers import WandbLogger
 
-from intuitive_sc.models.ranknet import LitRankNet, RankNet
-from intuitive_sc.utils.earlyreloading import DataLoaderReloader
+from fsscore.models.ranknet import LitRankNet, RankNet
+from fsscore.utils.earlyreloading import DataLoaderReloader
 
 
 def get_new_model_and_trainer(
@@ -54,7 +54,7 @@ def get_new_model_and_trainer(
     # wandb logger
     logger = WandbLogger(
         name="train",
-        project="intuitive-sc",
+        project="fsscore",
         save_dir=save_dir,
     )
 

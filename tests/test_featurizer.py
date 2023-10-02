@@ -3,7 +3,7 @@ from typing import List
 import pytest
 from rdkit import Chem
 
-from intuitive_sc.data.featurizer import (
+from fsscore.data.featurizer import (
     AVAILABLE_FEATURIZERS,
     FingerprintFeaturizer,
     get_featurizer,

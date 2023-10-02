@@ -18,8 +18,8 @@ from torch_geometric.data import Data, InMemoryDataset
 from torch_geometric.data.separate import separate
 from tqdm import tqdm
 
-from intuitive_sc.data.molgraph import NUM_NODE_FEATURES, MolGraph
-from intuitive_sc.utils.logging_utils import get_logger
+from fsscore.data.molgraph import NUM_NODE_FEATURES, MolGraph
+from fsscore.utils.logging_utils import get_logger
 
 LOGGER = get_logger(__name__)
 

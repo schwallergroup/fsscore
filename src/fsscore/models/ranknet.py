@@ -13,8 +13,8 @@ import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score
 from torch.optim import Adam
 
-from intuitive_sc.data.graph_dataset import GraphData
-from intuitive_sc.models.gnn import AVAILABLE_GRAPH_ENCODERS
+from fsscore.data.graph_dataset import GraphData
+from fsscore.models.gnn import AVAILABLE_GRAPH_ENCODERS
 
 _NOT_RECOGNISED_INPUT_TYPE = ValueError(
     "Not recognised input format, should be either tensor or tuple of tensors"

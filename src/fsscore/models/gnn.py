@@ -6,8 +6,8 @@ from typing import Dict, Type
 import torch.nn as nn
 from torch_geometric.utils import to_undirected
 
-from intuitive_sc.data.graph_dataset import GraphData
-from intuitive_sc.models.gnn_readouts import GATv2Layer, LineEvoLayer
+from fsscore.data.graph_dataset import GraphData
+from fsscore.models.gnn_readouts import GATv2Layer, LineEvoLayer
 
 AVAILABLE_GRAPH_ENCODERS: Dict[str, Type[nn.Module]] = {}
 

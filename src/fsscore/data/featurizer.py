@@ -9,8 +9,8 @@ import numpy as np
 import rdkit
 from rdkit.Chem import AllChem, DataStructs
 
-from intuitive_sc.data.graph_dataset import GraphData, GraphDatasetMem
-from intuitive_sc.data.molgraph import NUM_NODE_FEATURES, MolGraph
+from fsscore.data.graph_dataset import GraphData, GraphDatasetMem
+from fsscore.data.molgraph import NUM_NODE_FEATURES, MolGraph
 
 
 class Featurizer(abc.ABC):

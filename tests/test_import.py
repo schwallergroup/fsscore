@@ -1,13 +1,13 @@
 def test_import():
     """Verify that the package can be imported."""
-    import intuitive_sc
+    import fsscore
 
-    assert intuitive_sc
+    assert fsscore
 
 
 def test_import_version():
     """Verify that the package version can be imported."""
-    from intuitive_sc import __version__
+    from fsscore import __version__
 
     assert __version__
 

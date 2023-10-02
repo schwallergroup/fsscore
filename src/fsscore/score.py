@@ -10,11 +10,11 @@ import torch
 from pytorch_lightning import Trainer
 from rdkit import Chem
 
-from intuitive_sc.data.datamodule import CustomDataModule
-from intuitive_sc.data.featurizer import AVAILABLE_FEATURIZERS, Featurizer
-from intuitive_sc.models.ranknet import LitRankNet
-from intuitive_sc.utils.logging_utils import get_logger
-from intuitive_sc.utils.paths import PRETRAIN_MODEL_PATH, PROCESSED_PATH, RESULTS_PATH
+from fsscore.data.datamodule import CustomDataModule
+from fsscore.data.featurizer import AVAILABLE_FEATURIZERS, Featurizer
+from fsscore.models.ranknet import LitRankNet
+from fsscore.utils.logging_utils import get_logger
+from fsscore.utils.paths import PRETRAIN_MODEL_PATH, PROCESSED_PATH, RESULTS_PATH
 
 LOGGER = get_logger(__name__)
 
@@ -111,7 +111,7 @@ def reverse_sigmoid(x, low, high, k=1) -> float:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Score molecules with a trained model",
-        prog="intuitive_sc score",
+        prog="fsscore score",
     )
     parser.add_argument(
         "--model_path",

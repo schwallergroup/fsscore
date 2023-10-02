@@ -11,17 +11,17 @@ import torch
 import torch.nn.functional as F
 from rdkit import Chem
 
-from intuitive_sc.data.datamodule import CustomDataModule
-from intuitive_sc.data.featurizer import (
+from fsscore.data.datamodule import CustomDataModule
+from fsscore.data.featurizer import (
     AVAILABLE_FEATURIZERS,
     AVAILABLE_FP_FEATURIZERS,
     AVAILABLE_GRAPH_FEATURIZERS,
 )
-from intuitive_sc.models.gnn import AVAILABLE_GRAPH_ENCODERS
-from intuitive_sc.models.nn_utils import get_new_model_and_trainer
-from intuitive_sc.models.ranknet import LitRankNet
-from intuitive_sc.utils.logging_utils import get_logger
-from intuitive_sc.utils.paths import INPUT_TRAIN_PATH, MODEL_PATH, PROCESSED_PATH
+from fsscore.models.gnn import AVAILABLE_GRAPH_ENCODERS
+from fsscore.models.nn_utils import get_new_model_and_trainer
+from fsscore.models.ranknet import LitRankNet
+from fsscore.utils.logging_utils import get_logger
+from fsscore.utils.paths import INPUT_TRAIN_PATH, MODEL_PATH, PROCESSED_PATH
 
 LOGGER = get_logger(__name__)
 
@@ -207,7 +207,7 @@ def train(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Train a model to rank SMILES by synthetic complexity",
-        prog="intuitive_sc train",
+        prog="fsscore train",
     )
     parser.add_argument(
         "--data_path",

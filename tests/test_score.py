@@ -1,8 +1,8 @@
 import pytest
 
-from intuitive_sc.models.ranknet import LitRankNet
-from intuitive_sc.score import Scorer
-from intuitive_sc.utils.paths import PRETRAIN_MODEL_PATH
+from fsscore.models.ranknet import LitRankNet
+from fsscore.score import Scorer
+from fsscore.utils.paths import PRETRAIN_MODEL_PATH
 
 
 @pytest.fixture(scope="module")

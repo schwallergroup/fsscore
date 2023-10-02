@@ -5,9 +5,9 @@ from rdkit import Chem
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
 
-from intuitive_sc.data.dataloader import get_dataloader
-from intuitive_sc.data.molgraph import NUM_NODE_FEATURES
-from intuitive_sc.utils.logging_utils import get_logger
+from fsscore.data.dataloader import get_dataloader
+from fsscore.data.molgraph import NUM_NODE_FEATURES
+from fsscore.utils.logging_utils import get_logger
 
 LOGGER = get_logger(__name__)
 

@@ -19,8 +19,8 @@ from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from tqdm import tqdm
 
-from intuitive_sc.utils.logging_utils import get_logger
-from intuitive_sc.utils.paths import DATA_PATH
+from fsscore.utils.logging_utils import get_logger
+from fsscore.utils.paths import DATA_PATH
 
 LOGGER = get_logger(__name__)
 
