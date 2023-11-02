@@ -92,25 +92,25 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           parallel-finished: true
 
-  publish:
-    needs: finalize
-    if: ${{ github.event_name == 'push' && contains(github.ref, 'refs/tags/') }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
-        with: {python-version: "3.11"}
-      - name: Retrieve pre-built distribution files
-        uses: actions/download-artifact@v3
-        with: {name: python-distribution-files, path: dist/}
-      - name: Publish Package
-        env:
-          # TODO: Set your PYPI_TOKEN as a secret using GitHub UI
-          # - https://pypi.org/help/#apitoken
-          # - https://docs.github.com/en/actions/security-guides/encrypted-secrets
-          TWINE_REPOSITORY: pypi
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-        run: pipx run tox -e publish
+  # publish:
+  #   needs: finalize
+  #   if: ${{ github.event_name == 'push' && contains(github.ref, 'refs/tags/') }}
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: write
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: actions/setup-python@v4
+  #       with: {python-version: "3.10"}
+  #     - name: Retrieve pre-built distribution files
+  #       uses: actions/download-artifact@v3
+  #       with: {name: python-distribution-files, path: dist/}
+  #     - name: Publish Package
+  #       env:
+  #         # TODO: Set your PYPI_TOKEN as a secret using GitHub UI
+  #         # - https://pypi.org/help/#apitoken
+  #         # - https://docs.github.com/en/actions/security-guides/encrypted-secrets
+  #         TWINE_REPOSITORY: pypi
+  #         TWINE_USERNAME: __token__
+  #         TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+  #       run: pipx run tox -e publish

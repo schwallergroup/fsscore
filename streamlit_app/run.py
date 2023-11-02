@@ -7,15 +7,16 @@ from streamlit_extras.grid import grid
 from streamlit_extras.stylable_container import stylable_container
 from utils import (
     AVAIL_LABELED_PATHS,
+    AVAIL_SCORING_PATHS,
     AVAIL_UNLABELED_PATHS,
     LABELED_PATH,
     ROOT_PATH,
-    change_requirement,
     convert_df,
     convertToNumber,
     end_of_labeling,
     fine_tune_here,
     get_pair,
+    go_to_loading,
     init_important_variables,
     kickoff_finetuning,
     make_results_df,
@@ -26,6 +27,8 @@ from utils import (
     update_current_pair_hardest,
     update_database,
 )
+
+from fsscore.utils.paths import PRETRAIN_MODEL_PATH
 
 NAME_OF_APP = "FSscore"
 
@@ -79,17 +82,22 @@ def main():
     ###################### Sidebar ####################### # noqa
     ######################################################
     st.sidebar.title("Usage")
+    before = st.session_state.tab_of_site
     st.session_state.tab_of_site = st.sidebar.selectbox(
         "tab_of_site",
         ["Label molecules", "Fine-tune", "Score molecules"],
-        # TODO make another selection for just ranking without finetuning
         label_visibility="collapsed",
+        index=0,
     )
+    if before != st.session_state.tab_of_site:
+        st.session_state.state_of_site = "normal"
 
     if st.session_state.tab_of_site == "Label molecules":
         considered_paths = AVAIL_UNLABELED_PATHS
     elif st.session_state.tab_of_site == "Fine-tune":
         considered_paths = AVAIL_LABELED_PATHS
+    elif st.session_state.tab_of_site == "Score molecules":
+        considered_paths = AVAIL_SCORING_PATHS
 
     st.sidebar.title("Dataset")
     avail_datasets = [os.path.basename(path)[:-4] for path in considered_paths]
@@ -98,13 +106,11 @@ def main():
         avail_datasets,
         label_visibility="collapsed",
         placeholder="No datasets...",
-        on_change=change_requirement,
     )
 
-    if st.session_state.df_update_required:
-        update_database(
-            considered_paths[avail_datasets.index(st.session_state.selected_ds)]
-        )
+    update_database(
+        considered_paths[avail_datasets.index(st.session_state.selected_ds)]
+    )
 
     if st.session_state.number_current_pair == 0:
         unlabeled_fraction()
@@ -115,7 +121,7 @@ def main():
 
     col1, col2, col3 = st.columns([5, 5, 5])
     with col1:
-        st.header(f"Welcome to {NAME_OF_APP} app")
+        st.header(f"{NAME_OF_APP} app")
     with col2:
         st.image(os.path.join(ROOT_PATH, "data", "images", "liac_logo.png"), width=200)
     with col3:
@@ -126,29 +132,22 @@ def main():
     st.session_state.display_theme = "light"
 
     if st.session_state.state_of_site == "normal":
-        cols = st.columns(int(max_number_rxn_shown_top))
-
-        for i in range(max_number_rxn_shown_top):
-            i_shift = i - number_rxn_shown_top_each_side
-            i_rxn = st.session_state.number_current_pair + i_shift + 1
-            if i_rxn > 0 and i_rxn <= st.session_state.number_pair_feedback:
-                with cols[i]:
-                    if i_shift == 0:
-                        st.success(i_rxn)
-                    else:
-                        st.text(i_rxn)
-            else:
-                with cols[i]:
-                    st.text("")
-
-        ######################################################
-        ################## Label molecules ################### # noqa
-        ######################################################
-
-        # TODO add tab_of_site for fine-tuning where one chooses pretrained model and
-        # labelled data and then goes to state_of_site loading
-        # TODO add tab_of_site for scoring where one chooses model
         if st.session_state.tab_of_site == "Label molecules":
+            cols = st.columns(int(max_number_rxn_shown_top))
+
+            for i in range(max_number_rxn_shown_top):
+                i_shift = i - number_rxn_shown_top_each_side
+                i_rxn = st.session_state.number_current_pair + i_shift + 1
+                if i_rxn > 0 and i_rxn <= st.session_state.number_pair_feedback:
+                    with cols[i]:
+                        if i_shift == 0:
+                            st.success(i_rxn)
+                        else:
+                            st.text(i_rxn)
+                else:
+                    with cols[i]:
+                        st.text("")
+
             st.session_state.loading_bar = st.progress(0, text="")
             if (
                 st.session_state.number_pair_feedback != 0
@@ -277,6 +276,31 @@ def main():
                 "Get labeled data up until now :floppy_disk:",
                 on_click=make_results_df,
             )
+        elif st.session_state.tab_of_site == "Fine-tune":
+            st.header("Fine-tune your model")
+            st.subheader("1) Select dataset to fine-tune on to the left")
+            st.subheader("2) Select the graph-based model you want to fine-tune")
+
+            st.session_state.model_path = st.text_input(
+                "Insert path to the model or keep default.",
+                value=PRETRAIN_MODEL_PATH,
+            )
+            st.divider()
+
+            # fine-tune button
+            option_grid2 = grid([1, 5, 1])
+            option_grid2.text("")
+            option_grid2.button(
+                "Start fine-tuning",
+                on_click=go_to_loading,
+            )
+            option_grid2.text("")
+
+        elif st.session_state.tab_of_site == "Score molecules":
+            # not implemented yet
+            st.header("Score molecules")
+            st.subheader("Choose your model and your dataset")
+            # write that not implemented yet
 
     if st.session_state.state_of_site == "end_labeling":
         st.header("Thank you for labeling!")
@@ -302,6 +326,7 @@ def main():
             )
 
     if st.session_state.state_of_site == "get_dataset":
+        # print(st.session_state.dataset_name)
         output_name = f"{st.session_state.dataset_name.split('.')[0]}_labeled.csv"
         output_path = os.path.join(LABELED_PATH, output_name)
         df = pd.read_csv(output_path)
@@ -319,27 +344,20 @@ def main():
             )
 
     if st.session_state.state_of_site == "loading":
+        # insert some vertical space
+        st.markdown("##")
         cols = st.columns(3)
         with cols[0]:
             st.text("")
         with cols[1]:
-            st.header("Please wait, your model is being fine tuned...")
-        fine_tune_here()
+            with st.spinner("Fine-tuning model..."):
+                fine_tune_here()
         st.session_state.state_of_site = "give_model"
-        st.experimental_rerun()
 
     if st.session_state.state_of_site == "give_model":
-        cols = st.columns(3)
-        with cols[0]:
-            st.text("")
-        with cols[1]:
-            st.header("Click below to download your model")
-            st.download_button(
-                "Your fine-tuned model",
-                file_name="fine_tuned_model.pt",
-                data=b"fake_model",
-                use_container_width=True,
-            )  # !!! Change here !!!
+        st.header("Model fine-tuned!")
+        st.subheader("The checkpoint is saved at:")
+        st.text(st.session_state.ft_model_path)
 
 
 ######################################################

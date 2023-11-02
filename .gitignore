@@ -62,3 +62,5 @@ models/*
 lightning_logs
 results/*
 streamlit_app/__pycache__
+streamlit_app/data/labeled
+streamlit_app/data/models

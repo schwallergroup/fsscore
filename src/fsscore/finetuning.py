@@ -109,6 +109,7 @@ def finetune(
     smiles: List[Tuple[str, str]],
     target: List[float],
     graph_datapath: Optional[str] = None,
+    filename: Optional[str] = None,
     save_dir: Optional[str] = None,
     featurizer: str = "graph_2D",
     model_path: str = None,
@@ -141,7 +142,6 @@ def finetune(
     )
 
     if graph_datapath is None:
-        filename = os.path.basename(args.data_path).split(".")[0]
         graph_datapath = os.path.join(
             PROCESSED_PATH, f"temp_{logger.version}", f"{filename}_ft.pt"
         )
@@ -223,7 +223,7 @@ def finetune(
         "mode": "min",
         "save_last": True,
         "dirpath": os.path.join(save_dir, "checkpoints", f"run_{logger.version}"),
-        "filename": "ft_ranknet-{epoch:02d}-best" + f"_{monitor.split('/')[0]}_loss",
+        "filename": "ft_{epoch:02d}-best" + f"_{monitor.split('/')[0]}_loss",
     }
     ckpt = ModelCheckpoint(**ckpt_kwargs)
 
@@ -453,6 +453,7 @@ if __name__ == "__main__":
         smiles_pairs,
         target,
         graph_datapath=args.graph_datapath,
+        filename=os.path.basename(args.data_path).split(".")[0],
         save_dir=args.save_dir,
         featurizer=args.featurizer,
         model_path=args.model_path,

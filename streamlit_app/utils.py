@@ -3,7 +3,7 @@ import glob
 import json
 import os
 import re
-import time
+import shutil
 import uuid
 from io import BytesIO
 
@@ -13,13 +13,16 @@ import requests
 import streamlit as st
 from PIL import Image
 
-######################################################
-####################  VARIABLES  ##################### # noqa
-######################################################
+from fsscore.finetuning import finetune
+from fsscore.utils.paths import INPUT_TEST_PATH
 
 ROOT_PATH = "streamlit_app"
 UNLABELED_PATH = os.path.join(ROOT_PATH, "data", "unlabeled")
 LABELED_PATH = os.path.join(ROOT_PATH, "data", "labeled")
+MODELS_PATH = os.path.join(ROOT_PATH, "data", "models")
+os.makedirs(UNLABELED_PATH, exist_ok=True)
+os.makedirs(LABELED_PATH, exist_ok=True)
+os.makedirs(MODELS_PATH, exist_ok=True)
 
 swap_dict = {0: 0, 1: 2, 2: 1}
 
@@ -27,6 +30,7 @@ side_dict = {0: "", 1: "left", 2: "right"}
 
 AVAIL_UNLABELED_PATHS = glob.glob(os.path.join(UNLABELED_PATH, "*.csv"))
 AVAIL_LABELED_PATHS = glob.glob(os.path.join(LABELED_PATH, "*.csv"))
+AVAIL_SCORING_PATHS = glob.glob(os.path.join(ROOT_PATH, "data", "scoring", "*.csv"))
 
 dict_initial_values = {
     "state_of_site": "normal",
@@ -42,12 +46,9 @@ dict_initial_values = {
     "database_df": pd.read_csv(AVAIL_UNLABELED_PATHS[0]),
     "dataset_complete": None,
     "dataset_name": os.path.basename(AVAIL_UNLABELED_PATHS[0]),
-    "df_update_required": False,
 }
 
 
-######################################################
-####################  FUNCTIONS  ##################### # noqa
 ######################################################
 
 
@@ -74,19 +75,17 @@ def init_important_variables(restart=False):
     # don't want to shuffle rows as order based on variance
 
 
-def change_requirement():
-    st.session_state.df_update_required = True
-
-
 def update_database(filepath):
     dict_initial_values["database_df"] = pd.read_csv(filepath)
     dict_initial_values["dataset_name"] = os.path.basename(filepath)
-    st.session_state.database_df = dict_initial_values["database_df"]
-    st.session_state.dataset_name = dict_initial_values["dataset_name"]
+    st.session_state.update(
+        {
+            "database_df": dict_initial_values["database_df"],
+            "dataset_name": dict_initial_values["dataset_name"],
+        }
+    )
 
-    init_important_variables(restart=True)
-
-    st.session_state.df_update_required = False
+    init_important_variables()
 
     # make sure that columns smiles_i and smiles_j are there
     if (
@@ -290,22 +289,73 @@ def convert_df(df):
 def kickoff_finetuning():
     st.session_state.final_validation = True
     make_results_df()
-    st.session_state.state_of_site = "loading"
+    st.session_state.state_of_site = "normal"
+    st.session_state.state_of_site = "Fine-tune"
 
 
 def end_of_labeling():
     st.session_state.state_of_site = "end_labeling"
 
 
+def go_to_loading():
+    st.session_state.state_of_site = "loading"
+
+
 def fine_tune_here():
-    # Create a model on location 'streamlit_app/data/models/fine_tuned_model.pt'
-
     # TODO call make_results_df?
-    # also remark somewhere that dataset is avail?
 
-    time_i = time.time()
-    while time.time() - time_i < 5:
-        pass
+    save_dir = os.path.join(
+        MODELS_PATH,
+        f"ft_{st.session_state.dataset_name.split('.')[0]}_"
+        f"{datetime.datetime.now().strftime('%Y-%m-%d-%H-%M')}",
+    )
+
+    df = st.session_state.database_df.copy()
+
+    df_test = pd.read_csv(INPUT_TEST_PATH)
+    df_test = df_test.sample(n=5000, random_state=42)
+    smiles_test = df_test[["smiles_i", "smiles_j"]].values.tolist()
+    target_test = df_test["target"].values.tolist()
+
+    if "target" not in df.columns:
+        # print warning and exit
+        st.error("Warning: File requires 'target' as column name.")
+        st.stop()
+
+    smiles_pairs = df[["smiles_i", "smiles_j"]].values.tolist()
+    target = df["target"].values.tolist()
+
+    # TODO set some of the hyperparameters with sliders
+    # TODO not sure if earlystopping is working
+    # TODO FIXME need to have version without wandb logging
+    finetune(
+        smiles_pairs,
+        target,
+        save_dir=save_dir,
+        filename=st.session_state.dataset_name,
+        featurizer="graph_2D",
+        model_path=st.session_state.model_path,
+        batch_size=4,
+        n_epochs=20,
+        lr=0.0003,
+        track_improvement=False,
+        smiles_val_add=smiles_test,
+        target_val_add=target_test,
+        earlystopping=True,
+        patience=3,
+        val_size=0,  # production
+    )
+
+    # move trained model ckpt to models folder
+    model_path = glob.glob(os.path.join(save_dir, "checkpoints", "run_*", "last.ckpt"))[
+        0
+    ]
+
+    # TODO add more information (especially when having sliders for hyperpararms)
+    st.session_state.ft_model_path = os.path.join(
+        MODELS_PATH, f'ft_model_{st.session_state.dataset_name.split(".")[0]}.ckpt'
+    )
+    shutil.move(model_path, st.session_state.ft_model_path)
 
 
 def restart_labeling(path):
