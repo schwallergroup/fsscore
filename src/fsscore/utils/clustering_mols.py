@@ -6,7 +6,7 @@ import argparse
 import multiprocessing
 import os
 import random
-from itertools import combinations
+from itertools import product
 from typing import List
 
 import numpy as np
@@ -34,6 +34,8 @@ class ClusterMols:
         dissim_cutoff: float = 0.2,
         cluster_method: str = "kmeans",
         buffer: float = None,
+        n_pairs: int = 5000,
+        unique: bool = False,
     ) -> None:
         self.smiles = smiles
         self.labels = labels
@@ -41,6 +43,8 @@ class ClusterMols:
         self.dissim_cutoff = dissim_cutoff
         self.cluster_method = cluster_method
         self.buffer = buffer
+        self.n_pairs = n_pairs
+        self.unique = unique
         mols = [Chem.MolFromSmiles(smi) for smi in smiles]
         self.fp = self.get_fingerprints(mols)
         if cluster_method == "kmeans":
@@ -74,7 +78,7 @@ class ClusterMols:
         """
         Cluster molecules based on their fingerprints.
         """
-        pairs = self.create_unique_pairs(self.cluster_fn())
+        pairs = self.create_intersecting_pairs(self.cluster_fn())
 
         return pairs
 
@@ -137,17 +141,14 @@ class ClusterMols:
         all_scores_combined = []
         for param in tqdm(cluster_params, desc="Optimizing clustering"):
             clusters = self.cluster_fn(param)
-            pairs = self.create_unique_pairs(clusters)
-            max_pair_coverage = len(pairs) / (len(self.smiles) / 2)
             if len(set(clusters)) == len(self.smiles):
                 sil_score = 0
             else:
                 sil_score = silhouette_score(self.dists, clusters)
-            score_combined = max_pair_coverage * sil_score
-            all_scores_combined.append(score_combined)
+            all_scores_combined.append(sil_score)
         best_param = cluster_params[np.argmax(all_scores_combined)]
         clusters = self.cluster_fn(best_param)
-        pairs = self.create_unique_pairs(clusters)
+        pairs = self.create_intersecting_pairs(clusters)
         return pairs, best_param
 
     def optimize_clustering_parallel(
@@ -162,28 +163,25 @@ class ClusterMols:
             cluster_params = np.arange(0.1, 1, 0.1)
         else:
             raise ValueError("Invalid cluster method.")
-        all_scores = Parallel(n_jobs=multiprocessing.cpu_count() // 2)(
-            delayed(self.get_score_combined)(param)
+        all_scores = Parallel(n_jobs=multiprocessing.cpu_count() - 2)(
+            delayed(self.get_sil_score)(param)
             for param in tqdm(cluster_params, desc="Optimizing clustering")
         )
         best_param = cluster_params[np.argmax(all_scores)]
         clusters = self.cluster_fn(best_param)
-        pairs = self.create_unique_pairs(clusters)
+        pairs = self.create_intersecting_pairs(clusters)
         return pairs, best_param
 
-    def get_score_combined(
+    def get_sil_score(
         self,
         param: float,
     ) -> float:
         clusters = self.cluster_fn(param)
-        pairs = self.create_unique_pairs(clusters)
-        max_pair_coverage = len(pairs) / (len(self.smiles) / 2)
         if len(set(clusters)) == len(self.smiles):
             sil_score = 0
         else:
             sil_score = silhouette_score(self.dists, clusters)
-        score_combined = max_pair_coverage * sil_score
-        return score_combined
+        return sil_score
 
     def butina_cluster_fps(
         self,
@@ -225,6 +223,7 @@ class ClusterMols:
         """
         Pair molecules with different labels based on their fingerprints.
         """
+        # TODO if use, change so that intersecting pairs
         pairs = []
         n = len(self.labels)
         for i in range(n):
@@ -239,11 +238,7 @@ class ClusterMols:
                     pairs.append((i, j))
         return pairs
 
-    from itertools import combinations
-
-    import numpy as np
-
-    def create_unique_pairs(
+    def create_intersecting_pairs(
         self,
         clusters: List[int],
     ) -> List[tuple]:
@@ -269,40 +264,64 @@ class ClusterMols:
             cluster_dict[cluster_i].append(i)
 
         # Create a list of pairs of molecules with different labels
-        pairs = []
-        mols_added = set()
+        additional_pairs = set()
+        unique_mols_pairs = set()
+        mols_used = set()
         for cluster_i in cluster_dict:
             # iterate through all remaining clusters
             for cluster_j in cluster_dict:
                 if cluster_i != cluster_j:
-                    # Generate all possible pairs of molecules
-                    mol_pairs = combinations(
-                        cluster_dict[cluster_i] + cluster_dict[cluster_j], 2
+                    mol_pairs = product(
+                        cluster_dict[cluster_i], cluster_dict[cluster_j]
                     )
+
                     for i, j in mol_pairs:
-                        if self.labels and not self.buffer:
-                            if (
-                                self.labels[i] != self.labels[j]
-                                and i not in mols_added
-                                and j not in mols_added
-                            ):
-                                pairs.append((i, j))
-                                mols_added.add(i)
-                                mols_added.add(j)
-                        elif self.labels and self.buffer:
-                            if (
-                                abs(self.labels[i] - self.labels[j]) >= self.buffer
-                                and i not in mols_added
-                                and j not in mols_added
-                            ):
-                                pairs.append((i, j))
-                                mols_added.add(i)
-                                mols_added.add(j)
-                        else:
-                            if i not in mols_added and j not in mols_added:
-                                pairs.append((i, j))
-                                mols_added.add(i)
-                                mols_added.add(j)
+                        if (i, j) not in additional_pairs and (
+                            j,
+                            i,
+                        ) not in additional_pairs:
+                            if self.labels and not self.buffer:
+                                if self.labels[i] != self.labels[j]:
+                                    if i not in mols_used and j not in mols_used:
+                                        unique_mols_pairs.add((i, j))
+                                        mols_used.add(i)
+                                        mols_used.add(j)
+                                    additional_pairs.add((i, j))
+
+                            elif self.labels and self.buffer:
+                                if abs(self.labels[i] - self.labels[j]) >= self.buffer:
+                                    if i not in mols_used and j not in mols_used:
+                                        unique_mols_pairs.add((i, j))
+                                        mols_used.add(i)
+                                        mols_used.add(j)
+                                    additional_pairs.add((i, j))
+                            else:
+                                if i not in mols_used and j not in mols_used:
+                                    unique_mols_pairs.add((i, j))
+                                    mols_used.add(i)
+                                    mols_used.add(j)
+                                additional_pairs.add((i, j))
+
+        additional_pairs = additional_pairs.difference(unique_mols_pairs)
+
+        # assert that molecules from same cluster are not paired
+        for pair in unique_mols_pairs.union(additional_pairs):
+            assert clusters[pair[0]] != clusters[pair[1]]
+
+        if len(unique_mols_pairs) < self.n_pairs and not self.unique:
+            # sample from additional pairs
+            if self.n_pairs - len(unique_mols_pairs) < len(additional_pairs):
+                additional_pairs_sub = random.sample(
+                    additional_pairs, self.n_pairs - len(unique_mols_pairs)
+                )
+            else:
+                additional_pairs_sub = random.sample(
+                    additional_pairs, len(additional_pairs)
+                )
+            pairs = list(unique_mols_pairs.union(additional_pairs_sub))
+        else:
+            pairs = list(unique_mols_pairs)
+
         return pairs
 
 
@@ -396,8 +415,15 @@ if __name__ == "__main__":
         default=None,
         help="Buffer to use for pairing based on continuous labels.",
     )
+    parser.add_argument(
+        "--repeat_mols",
+        action="store_true",
+        help="Whether to use molecules in several pairs as opposed to uniquely.",
+    )
 
     args = parser.parse_args()
+
+    args.unique = not args.repeat_mols
 
     df = pd.read_csv(args.data_path)
 
@@ -416,6 +442,7 @@ if __name__ == "__main__":
         dissim_cutoff=args.dissim_cutoff,
         cluster_method=args.cluster_method,
         buffer=args.buffer,
+        unique=args.unique,
     )
 
     # TODO include option to do simple pairing? (when dataset size veery small)
