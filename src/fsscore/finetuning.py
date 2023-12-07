@@ -336,18 +336,6 @@ if __name__ == "__main__":
         default=None,
     )
     parser.add_argument(
-        "--mc_dropout_samples",
-        type=int,
-        help="Number of MC dropout samples",
-        default=1,
-    )
-    parser.add_argument(
-        "--dropout_p",
-        type=float,
-        help="Dropout probability",
-        default=0.0,
-    )
-    parser.add_argument(
         "--seed",
         type=int,
         help="Random seed",
