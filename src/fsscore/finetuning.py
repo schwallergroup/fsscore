@@ -7,10 +7,7 @@ import shutil
 from datetime import date
 from typing import List, Optional, Tuple, Union
 
-import finetuning_scheduler as fts
 import pandas as pd
-
-# https://github.com/speediedan/finetuning-scheduler/blob/main/README.md#installation-using-the-standalone-pytorch-lightning-package
 import pytorch_lightning as pl
 import torch
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -123,7 +120,6 @@ def finetune(
     track_improvement: bool = False,
     smiles_val_add: List[Tuple[str, str]] = None,
     target_val_add: List[float] = None,
-    ft_schedule_yaml: str = None,
     earlystopping: bool = True,
     patience: int = 3,
     datapoints: int = None,
@@ -238,17 +234,9 @@ def finetune(
         min_delta=0.02,  # only applies to pre-training metric
     )
 
-    # TODO max_depth (how many fts phases to do) as args
-    # FIXME no error msg but FTS not working yet
-    earlystopping_kwargs = {"monitor": monitor, "patience": patience}
-    fts_sched = fts.FinetuningScheduler(ft_schedule=ft_schedule_yaml, max_depth=-1)
-    fts_early_stopping = fts.FTSEarlyStopping(**earlystopping_kwargs)
-    fts_ckpt = fts.FTSCheckpoint(**ckpt_kwargs)
-
     callbacks = (
-        ([ckpt] if not ft_schedule_yaml else [])
+        ([ckpt])
         + ([track_improvement] if track_improvement else [])
-        + ([fts_sched, fts_early_stopping, fts_ckpt] if ft_schedule_yaml else [])
         + ([earlystop] if earlystopping else [])
     )
 
@@ -384,13 +372,6 @@ if __name__ == "__main__":
         default=False,
     )
     parser.add_argument(
-        "--ft_schedule_yaml",
-        type=str,
-        help="Path to the yaml file with the fine-tuning schedule.",
-        # TODO add default in paths.py
-        default=None,
-    )
-    parser.add_argument(
         "--earlystopping",
         action="store_true",
         help="Whether to use early stopping.",
@@ -422,7 +403,6 @@ if __name__ == "__main__":
     if args.earlystopping:
         LOGGER.info("Using early stopping.")
         args.track_pretest = True
-        args.ft_schedule_yaml = None
     if args.track_improvement and args.val_size > 0:
         LOGGER.info("Tracking improvement to pre-trained model.")
     elif args.track_improvement and args.val_size == 0:
@@ -453,7 +433,6 @@ if __name__ == "__main__":
         track_improvement=args.track_improvement,
         smiles_val_add=smiles_test if args.track_pretest else None,
         target_val_add=target_test if args.track_pretest else None,
-        ft_schedule_yaml=args.ft_schedule_yaml,
         earlystopping=args.earlystopping,
         patience=args.patience,
         val_size=args.val_size,

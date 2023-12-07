@@ -14,12 +14,15 @@ import streamlit as st
 from PIL import Image
 
 from fsscore.finetuning import finetune
+from fsscore.models.ranknet import LitRankNet
+from fsscore.score import Scorer
 from fsscore.utils.paths import INPUT_TEST_PATH
 
 ROOT_PATH = "streamlit_app"
 UNLABELED_PATH = os.path.join(ROOT_PATH, "data", "unlabeled")
 LABELED_PATH = os.path.join(ROOT_PATH, "data", "labeled")
 MODELS_PATH = os.path.join(ROOT_PATH, "data", "models")
+SCORE_PATH = os.path.join(ROOT_PATH, "data", "scoring")
 os.makedirs(UNLABELED_PATH, exist_ok=True)
 os.makedirs(LABELED_PATH, exist_ok=True)
 os.makedirs(MODELS_PATH, exist_ok=True)
@@ -88,13 +91,21 @@ def update_database(filepath):
     init_important_variables()
 
     # make sure that columns smiles_i and smiles_j are there
-    if (
-        "smiles_i" not in st.session_state.database_df.columns
-        or "smiles_j" not in st.session_state.database_df.columns
-    ):
-        # print warning and exit
-        st.error("Warning: File requires 'smiles_i' and 'smiles_j' as column names.")
-        st.stop()
+    if st.session_state.tab_of_site != "Score molecules":
+        if (
+            "smiles_i" not in st.session_state.database_df.columns
+            or "smiles_j" not in st.session_state.database_df.columns
+        ):
+            # print warning and exit
+            st.error(
+                "Warning: File requires 'smiles_i' and 'smiles_j' as column names."
+            )
+            st.stop()
+    else:
+        if "smiles" not in st.session_state.database_df.columns:
+            # print warning and exit
+            st.error("Warning: File requires 'smiles' as column name.")
+            st.stop()
 
 
 def unlabeled_fraction():
@@ -301,7 +312,11 @@ def go_to_loading():
     st.session_state.state_of_site = "loading"
 
 
-def fine_tune_here():
+def go_to_score_loading():
+    st.session_state.state_of_site = "loading_scoring"
+
+
+def fine_tune():
     # TODO call make_results_df?
 
     save_dir = os.path.join(
@@ -356,6 +371,41 @@ def fine_tune_here():
         MODELS_PATH, f'ft_model_{st.session_state.dataset_name.split(".")[0]}.ckpt'
     )
     shutil.move(model_path, st.session_state.ft_model_path)
+
+
+def score():
+    df = st.session_state.database_df.copy()
+    assert "smiles" in df.columns, "File requires 'smiles' as column name."
+    smiles = df["smiles"].values.tolist()
+
+    model = LitRankNet.load_from_checkpoint(
+        st.session_state.model_path_scoring,
+    )
+
+    # tempoarary filedrop (deleted at end of call)
+    graph_datapath = os.path.join(
+        SCORE_PATH, f"{st.session_state.dataset_name.split('.')[0]}_graphs_score.pt"
+    )
+
+    scorer = Scorer(
+        model=model,
+        featurizer="graph_2D",
+        batch_size=32,
+        graph_datapath=graph_datapath,
+    )
+
+    scores = scorer.score(smiles)
+
+    df["score"] = scores
+    # drop column has_label
+    df = df.drop(columns=["has_label"])
+
+    df.to_csv(
+        os.path.join(
+            SCORE_PATH, f"{st.session_state.dataset_name.split('.')[0]}_score.csv"
+        ),
+        index=False,
+    )
 
 
 def restart_labeling(path):

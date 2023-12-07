@@ -58,7 +58,7 @@ data_dev/*
 playground.ipynb
 scscore/*
 data/*
-models/*
+models/*/*
 lightning_logs
 results/*
 streamlit_app/__pycache__

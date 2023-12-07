@@ -1,3 +1,4 @@
+import glob
 import os
 import uuid
 
@@ -10,18 +11,22 @@ from utils import (
     AVAIL_SCORING_PATHS,
     AVAIL_UNLABELED_PATHS,
     LABELED_PATH,
+    MODELS_PATH,
     ROOT_PATH,
+    SCORE_PATH,
     convert_df,
     convertToNumber,
     end_of_labeling,
-    fine_tune_here,
+    fine_tune,
     get_pair,
     go_to_loading,
+    go_to_score_loading,
     init_important_variables,
     kickoff_finetuning,
     make_results_df,
     restart_labeling,
     rxn_to_image,
+    score,
     set_current_pair,
     unlabeled_fraction,
     update_current_pair_hardest,
@@ -300,7 +305,30 @@ def main():
             # not implemented yet
             st.header("Score molecules")
             st.subheader("Choose your model and your dataset")
-            # write that not implemented yet
+            st.subheader("1) Select dataset to score on to the left")
+            st.subheader("2) Select the graph-based model you want to use")
+            # give drop-down menu for model with selectbox
+            avail_models = glob.glob(os.path.join(MODELS_PATH, "*.ckpt"))
+            avail_models = [os.path.basename(path) for path in avail_models]
+            st.session_state.model_path_scoring = st.selectbox(
+                "model_path_scoring",
+                avail_models,
+                label_visibility="collapsed",
+                placeholder="No models...",
+            )
+            st.session_state.model_path_scoring = os.path.join(
+                MODELS_PATH, st.session_state.model_path_scoring
+            )
+            st.divider()
+
+            # score button
+            option_grid2 = grid([1, 5, 1])
+            option_grid2.text("")
+            option_grid2.button(
+                "Score",
+                on_click=go_to_score_loading,
+            )
+            option_grid2.text("")
 
     if st.session_state.state_of_site == "end_labeling":
         st.header("Thank you for labeling!")
@@ -351,13 +379,26 @@ def main():
             st.text("")
         with cols[1]:
             with st.spinner("Fine-tuning model..."):
-                fine_tune_here()
+                fine_tune()
         st.session_state.state_of_site = "give_model"
 
     if st.session_state.state_of_site == "give_model":
         st.header("Model fine-tuned!")
         st.subheader("The checkpoint is saved at:")
         st.text(st.session_state.ft_model_path)
+
+    if st.session_state.state_of_site == "loading_scoring":
+        # insert some vertical space
+        st.markdown("##")
+        cols = st.columns(3)
+        with cols[0]:
+            st.text("")
+        with cols[1]:
+            with st.spinner("Scoring molecules..."):
+                score()
+        st.session_state.state_of_site = "Molecules scored!"
+        st.subheader("The results are saved in folder:")
+        st.text(SCORE_PATH)
 
 
 ######################################################
