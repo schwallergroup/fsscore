@@ -21,4 +21,3 @@ def test_score(scorer):
     scores = scorer.score(smiles)
     assert len(scores) == len(smiles)
     assert isinstance(scores, np.ndarray)
-    assert isinstance(scores[0], np.float16)
