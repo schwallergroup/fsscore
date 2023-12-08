@@ -5,6 +5,7 @@ from typing import List
 import numpy as np
 import pandas as pd
 import pytorch_lightning as pl
+import torch
 from pytorch_lightning.loggers import WandbLogger
 
 from fsscore.data.datamodule import CustomDataModule
@@ -117,7 +118,7 @@ if __name__ == "__main__":
 
     LOGGER.info("Testing model")
     trainer = pl.Trainer(
-        precision="16-mixed",
+        precision="16-mixed" if torch.cuda.is_available() else 16,
         accelerator="auto",
         devices=1,
         max_epochs=-1,

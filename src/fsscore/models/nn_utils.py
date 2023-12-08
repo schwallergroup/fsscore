@@ -98,7 +98,7 @@ def get_new_model_and_trainer(
         arrange=arrange,
     )
     trainer = pl.Trainer(
-        precision="16-mixed",
+        precision="16-mixed" if torch.cuda.is_available() else 16,
         logger=logger,
         accelerator="auto",
         devices=torch.cuda.device_count(),

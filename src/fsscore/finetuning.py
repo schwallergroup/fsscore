@@ -79,7 +79,7 @@ class TrackImprovementToPretain(pl.Callback):
             depth_edges=self.depth_edges,
         )
         old_trainer = pl.Trainer(
-            precision="16-mixed",
+            precision="16-mixed" if torch.cuda.is_available() else 16,
             accelerator="auto",
             strategy="ddp",
             devices=torch.cuda.device_count(),
@@ -242,7 +242,7 @@ def finetune(
 
     # fine-tuning scheduler
     trainer = pl.Trainer(
-        precision="16-mixed",
+        precision="16-mixed" if torch.cuda.is_available() else 16,
         accelerator="auto",
         strategy="ddp",
         devices=torch.cuda.device_count(),

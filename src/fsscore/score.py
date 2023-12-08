@@ -47,7 +47,7 @@ class Scorer:
             self.depth_edges += 1
 
         self.trainer = Trainer(
-            precision="16-mixed",
+            precision="16-mixed" if torch.cuda.is_available() else 16,
             accelerator="auto",
             devices=1,
             max_epochs=-1,
