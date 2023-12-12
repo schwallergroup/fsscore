@@ -23,11 +23,11 @@ class Scorer:
     def __init__(
         self,
         model: LitRankNet = None,
-        featurizer: Featurizer = None,
+        featurizer: Featurizer = "graph_2D",
         num_workers: Optional[int] = None,
         mc_dropout_samples: int = 1,
         verbose: bool = False,
-        batch_size: int = 32,
+        batch_size: int = 128,
         graph_datapath: str = None,
         dropout_p: float = 0.0,
         keep_graphs: bool = False,
@@ -42,12 +42,14 @@ class Scorer:
         self.batch_size = batch_size
         self.keep_graphs = keep_graphs
         self.graph_datapath = None if self.model._hparams.fp else graph_datapath
+        if self.graph_datapath is None:
+            self.graph_datapath = os.path.join(PROCESSED_PATH, "graphs_score.pt")
         self.depth_edges = self.model._hparams.arrange.count("L") - 1
         if self.model._hparams.arrange[-1] != "L":
             self.depth_edges += 1
 
         self.trainer = Trainer(
-            precision="16-mixed" if torch.cuda.is_available() else 16,
+            precision="16-mixed",
             accelerator="auto",
             devices=1,
             max_epochs=-1,

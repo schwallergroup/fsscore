@@ -51,9 +51,10 @@ Installation
 
     git clone https://github.com/schwallergroup/fsscore.git
     cd fsscore
-    conda activate fsscore
-    pip install -e .
+    conda create -n fsscore python=3.10
+    conda activate FSscore
     pip install -r requirements.txt
+    pip install -e .
 
 .. _pyscaffold-notes:
 
@@ -68,7 +69,23 @@ Usage
 Scoring molecules
 -----------------
 
-To score molecules, use the ``score.py`` script. The script takes SMILES as input and outputs a CSV file with the scores. The script can be run as follows::
+The cfollowing code shows an example on how to easily score molecules in python  This examples uses the graph-based implementation of the FSscore.
+    .. code-block:: python
+
+        from fsscore.score import Scorer
+        from fsscore.models.ranknet import LitRankNet
+        from fsscore.utils.paths import PRETRAIN_MODEL_PATH
+
+        # 1) load pre-trained model or choose path to own model
+        model = LitRankNet.load_from_checkpoint(PRETRAIN_MODEL_PATH)
+
+        # 2) initialize scorer
+        scorer = Scorer(model=model)
+
+        # 3) predict scores given a list of SMILES
+        scores = scorer.score(smiles)
+
+To score molecules using the cimmand line, use the ``score.py`` script. The script takes SMILES as input and outputs a CSV file with the scores. The script can be run as follows::
 
     python score.py --model_path <path_to_model_file> --data_path <path_to_csv_file> --compound_cols <SMILES_column> --save_filepath <path_to_save_file> --featurizer graph_2D --batch_size 128
 
@@ -135,18 +152,3 @@ This repository contains a streamlit app that can be run locally. To run the app
 
 This will open a browser window with the app. Currently, only the labeling process is implemented. We are working on adding fine-tuning and scoring functionalities.
 The app should be run locally as files are written and saved. For deployment, please refer to the streamlit documentation.
-
-
-Making Changes & Contributing
-=============================
-
-This project uses pre-commit_, please make sure to install it before making any
-changes::
-
-    pip install pre-commit
-    cd fsscore
-    pre-commit install
-
-It is a good idea to update the hooks to the latest version::
-
-    pre-commit autoupdate
