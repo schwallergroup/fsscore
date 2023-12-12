@@ -69,7 +69,8 @@ Usage
 Scoring molecules
 -----------------
 
-The cfollowing code shows an example on how to easily score molecules in python  This examples uses the graph-based implementation of the FSscore.
+The following code shows an example on how to easily score molecules in python  This examples uses the graph-based implementation of the FSscore.
+
     .. code-block:: python
 
         from fsscore.score import Scorer
@@ -85,11 +86,12 @@ The cfollowing code shows an example on how to easily score molecules in python 
         # 3) predict scores given a list of SMILES
         scores = scorer.score(smiles)
 
-To score molecules using the cimmand line, use the ``score.py`` script. The script takes SMILES as input and outputs a CSV file with the scores. The script can be run as follows::
+To score molecules using the command line, use the ``score.py`` script. The script takes SMILES as input and outputs a CSV file with the scores. The script can be run as follows::
 
     python score.py --model_path <path_to_model_file> --data_path <path_to_csv_file> --compound_cols <SMILES_column> --save_filepath <path_to_save_file> --featurizer graph_2D --batch_size 128
 
 The following arguments are used:
+
     - ``--model_path``: Path to the model file. If no model path is provided the pre-trained graph-based model is used per default.
     - ``--data_path``: Path to the CSV file with SMILES to score.
     - ``--compound_cols``: Name of the column containing the SMILES.
@@ -105,6 +107,7 @@ To fine-tune a model, use the ``finetuning.py`` script. The script takes a CSV f
     python finetuning.py --data_path <path_to_finetuning_data> --featurizer graph_2D --compound_cols smiles_i smiles_j --rating_col target --save_dir <path_to_save_dir> --batch_size 4 --val_size 5 --n_epochs 20 --lr 0.0001 --datapoints 50 --track_improvement --track_pretest --earlystopping
 
 The following arguments are used:
+
     - ``--model_path``: Path to the model file. If no model path is provided the pre-trained graph-based model (GGLGGL) is used per default.
     - ``--data_path``: Path to the CSV file with the fine-tuning data in two columns of SMILES and a column of binary preference labels.
     - ``--featurizer``: Featurization method to use. The default is ``graph_2D``.
@@ -128,6 +131,7 @@ To train a model, use the ``train.py`` script. The script takes a CSV file with 
     python train.py --save_dir <path_to_save_dir> --featurizer graph_2D --n_epochs 250 --val_size 0.01 --batch_size 128 --arrange_layers GGLGGL --graph_encoder GNN --reload_interval 10
 
 The following arguments are used (the same as described in the paper):
+
     - ``--save_dir``: Directory to save the model in.
     - ``--featurizer``: Featurization method to use. The default is ``graph_2D``.
     - ``--n_epochs``: Number of epochs to train for.
