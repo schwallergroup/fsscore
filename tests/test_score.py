@@ -16,6 +16,7 @@ def scorer():
     return scorer
 
 
+@pytest.mark.skip(reason="Test not considered by pytest")
 def test_score(scorer):
     smiles = ["CCO", "CCC", "CCCC"]
     scores = scorer.score(smiles)

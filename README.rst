@@ -56,6 +56,7 @@ Installation
     pip install -r requirements.txt
     pip install -e .
 
+This method was tested and developed on CUDA-enabled GPUs (linux OS).
 .. _pyscaffold-notes:
 
 Data
