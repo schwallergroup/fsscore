@@ -1,3 +1,7 @@
+"""
+Code adapted from molskill
+github repo: https://github.com/microsoft/molskill
+"""
 import argparse
 import os
 from typing import List
