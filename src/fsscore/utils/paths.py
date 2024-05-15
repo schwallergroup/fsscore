@@ -12,5 +12,5 @@ PRETRAIN_MODEL_PATH = os.path.join(
     "pretrain_graph_GGLGGL_ep242_best_valloss.ckpt",
 )
 
-INPUT_TRAIN_PATH = os.path.join(DATA_PATH, "uspto_cjhif_combo_train_reorder.csv")
-INPUT_TEST_PATH = os.path.join(DATA_PATH, "uspto_cjhif_combo_test_reorder.csv")
+INPUT_TRAIN_PATH = os.path.join(DATA_PATH, "train_reorder.csv")
+INPUT_TEST_PATH = os.path.join(DATA_PATH, "test_reorder.csv")

@@ -61,8 +61,16 @@ This method was tested and developed on CUDA-enabled GPUs (linux OS).
 
 Data
 ====
-Training and testing data as well as trained models can be downloaded from figshare: https://figshare.com/s/2db88a98f73e22af6868
-Please download the ``data`` and ``models`` folders and place them in the root directory of the repository. The best graph-based model (GGLGGL) is already included in the ``models`` folder.
+Trained models can be downloaded from figshare: https://figshare.com/s/2db88a98f73e22af6868
+Please download the ``models`` folder and place it in the root directory of the repository. The best graph-based model (GGLGGL) is already included in this folder.
+
+The code for the data processing is made available in this repository (``data_processing``). Please change the paths in the bash script accordingly. These include the directory where you want to store the data (the default is recommended) and set the path to the additional data paths. Subsequently, run the following command:
+::
+
+    cd data_processing
+    ./process_data.sh
+
+This will create the necessary data files for pre-training.
 
 Usage
 =====
