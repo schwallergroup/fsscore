@@ -18,6 +18,7 @@ mkdir -p $DATA_DIR
 python $CWD/uspto_processing.py --data_dir $DATA_DIR
 
 # 2. Process data extracted from chemical journals
+# link to download the data: https://figshare.com/articles/dataset/original_data_zip/14647095
 # comment out if don't want to include this data
 CHEMPAPERS_FILE="path/to/utf8_file"
 # will just exit if file not found
