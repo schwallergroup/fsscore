@@ -1,4 +1,4 @@
-smiles_i,smiles_j,has_label
-COc1ccc2cc(ccc2c1)C(C)(O)C(=O)O,CCOC(=O)C(C)(C#N)c1ccc2cc(OC)ccc2c1,True
-NC(C(C)C)C(=O)O,N(C(C(C)C)C(=O)O)C(=O)C(C)N,True
-CN1C=NC2=C1C(=O)N(C(=O)N2C)C,CN1CCC23C4C1CC5=C2C(=C(C=C5)OC)OC3C(C=C4)O,True
+smiles_i,smiles_j
+COc1ccc2cc(ccc2c1)C(C)(O)C(=O)O,CCOC(=O)C(C)(C#N)c1ccc2cc(OC)ccc2c1
+NC(C(C)C)C(=O)O,N(C(C(C)C)C(=O)O)C(=O)C(C)N
+CN1C=NC2=C1C(=O)N(C(=O)N2C)C,CN1CCC23C4C1CC5=C2C(=C(C=C5)OC)OC3C(C=C4)O

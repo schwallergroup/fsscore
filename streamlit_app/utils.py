@@ -16,29 +16,26 @@ from PIL import Image
 from fsscore.finetuning import finetune
 from fsscore.models.ranknet import LitRankNet
 from fsscore.score import Scorer
-from fsscore.utils.paths import INPUT_TEST_PATH
+from fsscore.utils.clustering_mols import ClusterMols
+from fsscore.utils.paths import PRETRAIN_MODEL_PATH
 
 ROOT_PATH = "streamlit_app"
 UNLABELED_PATH = os.path.join(ROOT_PATH, "data", "unlabeled")
 LABELED_PATH = os.path.join(ROOT_PATH, "data", "labeled")
 MODELS_PATH = os.path.join(ROOT_PATH, "data", "models")
-SCORE_PATH = os.path.join(ROOT_PATH, "data", "scoring")
+UNSCORED_PATH = os.path.join(ROOT_PATH, "data", "scoring")
+SCORED_PATH = os.path.join(ROOT_PATH, "data", "scored")
 os.makedirs(UNLABELED_PATH, exist_ok=True)
 os.makedirs(LABELED_PATH, exist_ok=True)
 os.makedirs(MODELS_PATH, exist_ok=True)
 
 swap_dict = {0: 0, 1: 2, 2: 1}
-
 side_dict = {0: "", 1: "left", 2: "right"}
-
-AVAIL_UNLABELED_PATHS = glob.glob(os.path.join(UNLABELED_PATH, "*.csv"))
-AVAIL_LABELED_PATHS = glob.glob(os.path.join(LABELED_PATH, "*.csv"))
-AVAIL_SCORING_PATHS = glob.glob(os.path.join(ROOT_PATH, "data", "scoring", "*.csv"))
 
 dict_initial_values = {
     "state_of_site": "normal",
     "number_pair_feedback": 100,
-    "tab_of_site": "Label molecules",
+    "tab_of_site": "Home",
     "number_current_pair": 0,
     "final_validation": False,
     "database_already_shuffled": False,
@@ -46,9 +43,9 @@ dict_initial_values = {
     "current_pair_hardest": None,
     "highest_pair_seen": 0,
     "pair_number_last_images": -1,
-    "database_df": pd.read_csv(AVAIL_UNLABELED_PATHS[0]),
+    "database_df": None,
     "dataset_complete": None,
-    "dataset_name": os.path.basename(AVAIL_UNLABELED_PATHS[0]),
+    "dataset_name": None,
 }
 
 
@@ -88,6 +85,10 @@ def update_database(filepath):
         }
     )
 
+    st.session_state.number_pair_feedback = min(
+        len(dict_initial_values["database_df"]), 100
+    )
+
     init_important_variables()
 
     # make sure that columns smiles_i and smiles_j are there
@@ -109,21 +110,23 @@ def update_database(filepath):
 
 
 def unlabeled_fraction():
-    if "has_label" not in st.session_state.database_df.columns:
-        st.session_state.database_df["has_label"] = False
-        st.session_state.database_df.to_csv(
-            os.path.join(UNLABELED_PATH, st.session_state.dataset_name), index=False
-        )
+    if st.session_state.number_current_pair == 0:
+        if "has_label" not in st.session_state.database_df.columns:
+            st.session_state.database_df["has_label"] = False
+            st.session_state.database_df.to_csv(
+                os.path.join(UNLABELED_PATH, st.session_state.dataset_name), index=False
+            )
 
-    st.session_state.database_df = st.session_state.database_df[
-        ~st.session_state.database_df["has_label"]
-    ]
+    # st.session_state.database_df = st.session_state.database_df[
+    #     ~st.session_state.database_df["has_label"]
+    # ]
+
+    st.session_state.number_current_pair = len(
+        st.session_state.database_df[st.session_state.database_df["has_label"]]
+    )
 
     if len(st.session_state.database_df) == 0:
         st.session_state.state_of_site = "end_labeling"
-
-    if len(st.session_state.database_df) < st.session_state.number_pair_feedback:
-        st.session_state.number_pair_feedback = len(st.session_state.database_df)
 
 
 def get_pair(number):
@@ -288,8 +291,6 @@ def make_results_df():
 
     df.to_csv(output_path, index=False)
 
-    st.session_state.state_of_site = "get_dataset"
-
 
 @st.cache_data
 def convert_df(df):
@@ -299,12 +300,13 @@ def convert_df(df):
 
 def kickoff_finetuning():
     st.session_state.final_validation = True
-    make_results_df()
     st.session_state.state_of_site = "normal"
-    st.session_state.state_of_site = "Fine-tune"
+    st.session_state.tab_of_site = "Fine-tune"
+    make_results_df()
 
 
 def end_of_labeling():
+    make_results_df()
     st.session_state.state_of_site = "end_labeling"
 
 
@@ -316,9 +318,77 @@ def go_to_score_loading():
     st.session_state.state_of_site = "loading_scoring"
 
 
-def fine_tune():
-    # TODO call make_results_df?
+def _go_to_labeling():
+    datapath = os.path.join(UNLABELED_PATH, f"{st.session_state.paired_ds}.csv")
+    go_to_labeling(datapath)
 
+
+def go_to_labeling(path):
+    update_database(path)
+    unlabeled_fraction()
+    st.session_state.tab_of_site = "Label molecules"
+    st.session_state.state_of_site = "_labeling"
+
+
+def restart_labeling(path):
+    make_results_df()
+    update_database(path)
+    unlabeled_fraction()
+    st.session_state.tab_of_site = "Label molecules"
+    st.session_state.state_of_site = "_labeling"
+
+
+def pair_molecules(filepath):
+    df = pd.read_csv(filepath)
+    assert "smiles" in df.columns, "File requires 'smiles' as column name."
+
+    smiles = df["smiles"].values.tolist()
+
+    # cluster molecules
+    cluster_mols = ClusterMols(
+        smiles=smiles,
+    )
+    pairs, _ = cluster_mols.optimize_clustering_parallel()
+
+    pairs_smi = []
+    for pair in pairs:
+        pairs_smi.append((smiles[pair[0]], smiles[pair[1]]))
+    df_pairs = pd.DataFrame(
+        {
+            "smiles_i": [pair[0] for pair in pairs_smi],
+            "smiles_j": [pair[1] for pair in pairs_smi],
+        }
+    )
+
+    return df_pairs
+
+
+def rank_by_uncertainty(df, output_path):
+    model = LitRankNet.load_from_checkpoint(
+        PRETRAIN_MODEL_PATH,
+    )
+
+    scorer = Scorer(
+        model=model,
+        featurizer="graph_2D",
+        batch_size=128,
+        graph_datapath=None,
+        mc_dropout_samples=100,
+        dropout_p=0.2,
+        keep_graphs=False,
+    )
+
+    smiles = df[["smiles_i", "smiles_j"]].values.tolist()
+    scores_mean, scores_var = scorer.score(smiles=smiles)
+
+    df["score_diff_mean"] = scores_mean
+    df["score_diff_var"] = scores_var
+
+    df = df.sort_values(by="score_diff_var", ascending=False)
+    df.to_csv(output_path, index=False)
+
+
+def fine_tune():
     save_dir = os.path.join(
         MODELS_PATH,
         f"ft_{st.session_state.dataset_name.split('.')[0]}_"
@@ -327,10 +397,18 @@ def fine_tune():
 
     df = st.session_state.database_df.copy()
 
-    df_test = pd.read_csv(INPUT_TEST_PATH)
-    df_test = df_test.sample(n=5000, random_state=42)
-    smiles_test = df_test[["smiles_i", "smiles_j"]].values.tolist()
-    target_test = df_test["target"].values.tolist()
+    n_samples = st.session_state.num_samples
+
+    if n_samples > len(df):
+        st.error(f"Number of samples exceeds number of available samples ({len(df)}).")
+        st.stop()
+    if n_samples > -1:
+        df = df.sample(n=st.session_state.num_samples, random_state=42)
+    else:
+        n_samples = len(df)
+
+    smiles_test = df[["smiles_i", "smiles_j"]].values.tolist()
+    target_test = df["target"].values.tolist()
 
     if "target" not in df.columns:
         # print warning and exit
@@ -340,9 +418,11 @@ def fine_tune():
     smiles_pairs = df[["smiles_i", "smiles_j"]].values.tolist()
     target = df["target"].values.tolist()
 
-    # TODO set some of the hyperparameters with sliders
+    bs = st.session_state.batch_size
+    lr = st.session_state.lr
+    epochs = st.session_state.num_epochs
+
     # TODO not sure if earlystopping is working
-    # TODO FIXME need to have version without wandb logging
     finetune(
         smiles_pairs,
         target,
@@ -350,15 +430,16 @@ def fine_tune():
         filename=st.session_state.dataset_name,
         featurizer="graph_2D",
         model_path=st.session_state.model_path,
-        batch_size=4,
-        n_epochs=20,
-        lr=0.0003,
+        batch_size=bs,
+        n_epochs=epochs,
+        lr=lr,
         track_improvement=False,
         smiles_val_add=smiles_test,
         target_val_add=target_test,
         earlystopping=True,
-        patience=3,
+        patience=st.session_state.patience,
         val_size=0,  # production
+        wandb_mode="disabled",
     )
 
     # move trained model ckpt to models folder
@@ -366,9 +447,9 @@ def fine_tune():
         0
     ]
 
-    # TODO add more information (especially when having sliders for hyperpararms)
     st.session_state.ft_model_path = os.path.join(
-        MODELS_PATH, f'ft_model_{st.session_state.dataset_name.split(".")[0]}.ckpt'
+        MODELS_PATH,
+        f'ft_model_{st.session_state.dataset_name.split(".")[0]}_n{n_samples}_bs{bs}.ckpt',  # noqa
     )
     shutil.move(model_path, st.session_state.ft_model_path)
 
@@ -384,7 +465,7 @@ def score():
 
     # tempoarary filedrop (deleted at end of call)
     graph_datapath = os.path.join(
-        SCORE_PATH, f"{st.session_state.dataset_name.split('.')[0]}_graphs_score.pt"
+        SCORED_PATH, f"{st.session_state.dataset_name.split('.')[0]}_graphs_score.pt"
     )
 
     scorer = Scorer(
@@ -398,19 +479,12 @@ def score():
 
     df["score"] = scores
     # drop column has_label
-    df = df.drop(columns=["has_label"])
+    if "has_label" in df.columns:
+        df = df.drop(columns=["has_label"])
 
     df.to_csv(
         os.path.join(
-            SCORE_PATH, f"{st.session_state.dataset_name.split('.')[0]}_score.csv"
+            SCORED_PATH, f"{st.session_state.dataset_name.split('.')[0]}_score.csv"
         ),
         index=False,
     )
-
-
-def restart_labeling(path):
-    make_results_df()
-    update_database(path)
-    unlabeled_fraction()
-    st.session_state.tab_of_site = "Label molecules"
-    st.session_state.state_of_site = "normal"

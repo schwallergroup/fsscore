@@ -123,6 +123,7 @@ def finetune(
     earlystopping: bool = True,
     patience: int = 3,
     datapoints: int = None,
+    wandb_mode: str = "online",
 ) -> None:
     """
     Fine-tunes the model
@@ -135,6 +136,7 @@ def finetune(
         project="fsscore",
         save_dir=save_dir,
         tags=[str(datapoints)],
+        mode=wandb_mode,
     )
 
     if graph_datapath is None:
