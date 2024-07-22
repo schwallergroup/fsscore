@@ -124,6 +124,7 @@ def finetune(
     patience: int = 3,
     datapoints: int = None,
     wandb_mode: str = "online",
+    device="auto",
 ) -> None:
     """
     Fine-tunes the model
@@ -245,9 +246,9 @@ def finetune(
     # fine-tuning scheduler
     trainer = pl.Trainer(
         precision="16-mixed",
-        accelerator="auto",
+        accelerator=device,
         strategy="ddp",
-        devices=torch.cuda.device_count(),
+        devices=torch.cuda.device_count() if device == "auto" else 1,
         log_every_n_steps=log_every,
         max_epochs=n_epochs,
         logger=logger,

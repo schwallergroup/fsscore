@@ -96,8 +96,8 @@ matplotlib-inline==0.1.6
 mdurl==0.1.2
 memory-profiler==0.61.0
 mistune==2.0.5
-mkl-random==1.2.2
-mkl-service==2.4.0
+# mkl-random
+# mkl-service==2.4.0
 molplotly==1.1.7
 more-itertools==10.1.0
 mpmath==1.2.1
@@ -212,7 +212,7 @@ torchvision
 tornado==6.3
 tqdm==4.65.0
 traitlets==5.9.0
-triton==2.0.0
+# triton==2.0.0
 typing-extensions==4.7.1
 tzdata==2023.3
 tzlocal==4.3.1

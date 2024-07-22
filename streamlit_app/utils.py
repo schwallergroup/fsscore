@@ -12,6 +12,7 @@ import pandas as pd
 import requests
 import streamlit as st
 from PIL import Image
+import torch
 
 from fsscore.finetuning import finetune
 from fsscore.models.ranknet import LitRankNet
@@ -367,15 +368,18 @@ def rank_by_uncertainty(df, output_path):
     model = LitRankNet.load_from_checkpoint(
         PRETRAIN_MODEL_PATH,
     )
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
     scorer = Scorer(
         model=model,
         featurizer="graph_2D",
-        batch_size=128,
+        batch_size=32,
         graph_datapath=None,
         mc_dropout_samples=100,
         dropout_p=0.2,
         keep_graphs=False,
+        num_workers=None if device == "cuda" else 0,
+        device=device,
     )
 
     smiles = df[["smiles_i", "smiles_j"]].values.tolist()
@@ -440,6 +444,8 @@ def fine_tune():
         patience=st.session_state.patience,
         val_size=0,  # production
         wandb_mode="disabled",
+        device="cuda" if torch.cuda.is_available() else "cpu",
+        num_workers=None if torch.cuda.is_available() else 0,
     )
 
     # move trained model ckpt to models folder
@@ -468,11 +474,16 @@ def score():
         SCORED_PATH, f"{st.session_state.dataset_name.split('.')[0]}_graphs_score.pt"
     )
 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
     scorer = Scorer(
         model=model,
         featurizer="graph_2D",
         batch_size=32,
         graph_datapath=graph_datapath,
+        keep_graphs=False,
+        num_workers=None if device == "cuda" else 0,
+        device=device,
     )
 
     scores = scorer.score(smiles)

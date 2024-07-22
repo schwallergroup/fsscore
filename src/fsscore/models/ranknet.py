@@ -49,7 +49,7 @@ def compute_metrics(
         if target_prob:
             target = target > prob_thresh
         target = target.cpu().numpy()[:, 0]
-        prob = torch.sigmoid(logit).cpu().numpy()[:, 0]
+        prob = torch.sigmoid(logit).cpu().float().numpy()[:, 0]
         if len(np.unique(target)) > 1:
             metrics["auroc"] = roc_auc_score(target, prob)
 

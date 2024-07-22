@@ -2,6 +2,7 @@
 Code adapted from molskill
 github repo: https://github.com/microsoft/molskill
 """
+
 import argparse
 import multiprocessing
 import os
@@ -35,6 +36,7 @@ class Scorer:
         graph_datapath: str = None,
         dropout_p: float = 0.0,
         keep_graphs: bool = False,
+        device="auto",
     ) -> None:
         self.model = model
         self.featurizer = featurizer
@@ -54,7 +56,7 @@ class Scorer:
 
         self.trainer = Trainer(
             precision="16-mixed",
-            accelerator="auto",
+            accelerator=device,
             devices=1,
             max_epochs=-1,
             logger=verbose,
@@ -102,9 +104,12 @@ class Scorer:
             scores_mean, scores_var = [pred[0] for pred in preds], [
                 pred[1] for pred in preds
             ]
-            return torch.cat(scores_mean).numpy(), torch.cat(scores_var).numpy()
+            return (
+                torch.cat(scores_mean).float().numpy(),
+                torch.cat(scores_var).float().numpy(),
+            )
         else:
-            return torch.cat(preds).numpy()
+            return torch.cat(preds).float().numpy()
 
 
 def reverse_sigmoid(x, low, high, k=1) -> float:
