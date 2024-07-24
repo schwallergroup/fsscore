@@ -1,9 +1,102 @@
 [build-system]
-# AVOID CHANGING REQUIRES: IT WILL BE UPDATED BY PYSCAFFOLD!
-requires = ["setuptools>=46.1.0", "setuptools_scm[toml]>=5"]
+requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[project]
+name = "fsscore"
+description = "Synthetic feasibility score augmented with human feedback."
+authors = [
+    {name = "rneeser", email = "rebecca.neeser@epfl.ch"},
+]
+readme = "README.rst"
+requires-python = ">=3.8"
+license = {file = "LICENSE.txt"}
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dynamic = ["version"]
+dependencies = [
+    "finetuning-scheduler",
+    "gdown",
+    "lightning==2.0.7",
+    "matplotlib",
+    "networkx==2.8.4",
+    "numpy~=1.24.3",
+    "pandas",
+    "pytorch-lightning==2.0.2",
+    "rdkit-pypi==2022.9.5",
+    "requests",
+    "scikit-learn",
+    "scipy",
+    "streamlit",
+    "torch==2.0.0",
+    "torch-geometric==2.3.0",
+    # "torch-scatter==2.1.1",
+    "torchvision",
+    "torchaudio",
+    "tqdm",
+    "wandb",
+]
+
+[project.optional-dependencies]
+tests = [
+    "setuptools",
+    "pytest",
+    "pytest-cov",
+    "tox",
+    "coverage",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/schwallergroup/fsscore"
+"Bug Tracker" = "https://github.com/schwallergroup/fsscore/issues"
+"Source Code" = "https://github.com/schwallergroup/fsscore"
+
+[tool.setuptools]
+packages = ["fsscore"]
+package-dir = {"" = "src"}
+
 [tool.setuptools_scm]
-# For smarter version schemes and other configuration options,
-# check out https://github.com/pypa/setuptools_scm
 version_scheme = "no-guess-dev"
+
+[tool.pytest.ini_options]
+pythonpath = [".", "src"]
+addopts = "--verbose"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["fsscore"]
+omit = ["tests/*", "docs/*"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = ["raise NotImplementedError"]
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "W503"]
+exclude = [
+    ".tox",
+    ".git",
+    "__pycache__",
+    "docs/source/conf.py",
+    "build",
+    "dist",
+    "*.pyc",
+    "*.egg-info",
+    ".cache",
+    ".eggs",
+    "data",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+include = '\.pyi?$'

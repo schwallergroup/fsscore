@@ -32,5 +32,5 @@ def test_featurizer(featurizer_name: str, smiles: List[str], nbits: int):
             assert len(feat) == nbits
             assert featurizer.dim() == nbits
         else:
-            assert type(feat) == dict
+            assert type(feat) is dict
             assert feat["x"].shape[1] == featurizer.dim()
