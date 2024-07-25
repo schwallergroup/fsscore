@@ -54,7 +54,6 @@ Installation
     cd fsscore
     conda create -n fsscore python=3.10
     conda activate FSscore
-    pip install -r requirements.txt
     pip install -e .
 
 This method was tested and developed on CUDA-enabled GPUs (linux OS).
