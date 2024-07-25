@@ -56,7 +56,7 @@ Installation
     conda activate FSscore
     pip install -e .
 
-This method was tested and developed on CUDA-enabled GPUs (linux OS).
+This method was developed on CUDA-enabled GPUs (linux OS) and furhter tested on macOS.
 
 .. _pyscaffold-notes:
 
